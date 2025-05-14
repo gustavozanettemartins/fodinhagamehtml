@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a5420">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Jogo de Cartas Fodinha - Multiplayer</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="img/icon-192x192.png">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <!-- Modal para entrar em uma sala -->
+    <div class="modal" id="join-room-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Fodinha - Jogo Multiplayer</h2>
+            <div>
+                <label for="player-name">Seu nome:</label>
+                <input type="text" id="player-name" placeholder="Seu nome">
+            </div>
+            <div>
+                <label for="room-id">Código da sala (opcional):</label>
+                <input type="text" id="room-id" placeholder="Deixe em branco para criar uma nova sala">
+            </div>
+            <div class="modal-buttons">
+                <button id="join-room-btn">Entrar / Criar Sala</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal da sala de espera -->
+    <div class="modal" id="waiting-room-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Sala de Espera</h2>
+            <div class="room-info">
+                <p>Código da sala: <span id="room-code">ABCDEF</span></p>
+                <button id="copy-room-code">Copiar</button>
+            </div>
+            <div class="players-list-container">
+                <h3>Jogadores:</h3>
+                <ul id="players-list">
+                    <!-- Será preenchido dinamicamente -->
+                </ul>
+            </div>
+            <div class="modal-buttons">
+                <button id="player-ready-btn">Pronto</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para palpite -->
+    <div class="modal" id="guess-modal">
+        <div class="modal-content">
+            <div class="minimize-controls">
+                <button class="minimize-btn" title="Minimizar">-</button>
+                <button class="maximize-btn" title="Maximizar">+</button>
+            </div>
+            <h2 class="modal-title">Quantas rodadas você acha que vai ganhar?</h2>
+            <div class="hide-when-minimized">
+                <input type="number" id="guess-value" min="0" value="0">
+                <p id="dealer-restrictions"></p>
+            </div>
+            <div class="modal-buttons">
+                <button id="confirm-guess-btn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para fim do jogo -->
+    <div class="modal" id="game-over-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Fim de Jogo!</h2>
+            <p id="winner-text"></p>
+            <div class="modal-buttons">
+                <button id="new-game-btn">Novo Jogo</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para resumo da rodada -->
+    <div class="modal" id="round-summary-modal">
+        <div class="modal-content">
+            <div class="minimize-controls">
+                <button class="minimize-btn" title="Minimizar">-</button>
+                <button class="maximize-btn" title="Maximizar">+</button>
+            </div>
+            <h2 class="modal-title">Resumo da Rodada</h2>
+            <div class="round-summary hide-when-minimized">
+                <table class="summary-table" id="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Jogador</th>
+                            <th>Palpite</th>
+                            <th>Ganhou</th>
+                            <th>Dano</th>
+                            <th>Vidas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-body">
+                        <!-- Preenchido via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-buttons">
+                <button id="continue-btn">Continuar</button>
+            </div>
+        </div>
+    </div>
+    
+    <header>
+        <h1>Fodinha - Jogo de Cartas Multiplayer</h1>
+        <div id="room-info-bar" class="room-info-bar">
+            <span>Sala: <span id="current-room-code"></span></span>
+            <span class="players-online">Jogadores: <span id="players-count">0</span></span>
+            <span class="sound-toggle">
+                <button id="sound-toggle-btn" title="Ativar/Desativar sons">🔊</button>
+            </span>
+        </div>
+    </header>
+    
+    <main>
+        <div class="game-container">
+            <div class="game-status">
+                <div>Rodada: <span id="round-number">1</span></div>
+                <div>Fase: <span id="phase-text">Esperando jogadores</span></div>
+                <div>Suas vidas: <span id="player-lives">5</span></div>
+                <div id="player-guess-hud" class="player-guess-hud" style="display: none;">Seu palpite: <span>0</span> | Ganhou: <span>0</span></div>
+            </div>
+            
+            <div class="game-area">
+                <!-- Card history panel on the left -->
+                <div class="card-history-panel">
+                    <h3>Histórico de Jogadas</h3>
+                    <div class="history-content" id="card-history">
+                        <!-- Card history will be populated here -->
+                        <div class="history-empty-message">O histórico de jogadas aparecerá aqui durante a rodada.</div>
+                    </div>
+                </div>
+                
+                <div class="game-board">
+                    <div class="players-container" id="players-container">
+                        <!-- Preenchido via JavaScript -->
+                    </div>
+                    
+                    <div class="table-center">
+                        <img id="trump-card" class="trump-card" src="" alt="Carta do Trunfo">
+                        <div class="round-info">Rodada: <span id="table-round">1</span></div>
+                    </div>
+                    
+                    <div class="player-hand" id="player-hand">
+                        <!-- Preenchido via JavaScript -->
+                    </div>
+                    
+                    <div class="actions">
+                        <div id="waiting-message">Aguardando seu turno...</div>
+                        <button id="play-card-btn" disabled>Jogar Carta Selecionada</button>
+                    </div>
+                </div>
+                
+                <!-- Chat panel on the right -->
+                <div class="chat-panel">
+                    <h3>Chat</h3>
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Chat messages will be displayed here -->
+                        <div class="system-message">Bem-vindo ao chat do jogo!</div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chat-input" placeholder="Digite sua mensagem..." maxlength="100">
+                        <button id="send-chat-btn">Enviar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <script src="js/game.js"></script>
+    <script>
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

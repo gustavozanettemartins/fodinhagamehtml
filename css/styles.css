@@ -1,0 +1,1189 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #1a5420;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-image: linear-gradient(to bottom right, #1a5420, #0f3013);
+}
+
+header {
+    background-color: #0f3013;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+header h1 {
+    font-size: 1.8rem;
+    color: #ffd700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: 1px;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.game-status {
+    background-color: #0f3013;
+    padding: 15px 20px;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: space-between;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.game-area {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    gap: 20px;
+}
+
+.game-board {
+    background-color: #3b7d3f;
+    border-radius: 10px;
+    padding: 20px;
+    width: 100%;
+    max-width: 700px;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.players-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+    justify-content: center;
+}
+
+.player {
+    background-color: #1a5420;
+    border: 2px solid #0f3013;
+    border-radius: 5px;
+    padding: 15px;
+    min-width: 200px;
+    position: relative;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.3s, transform 0.3s;
+}
+
+.player.current {
+    border-color: #ffd700;
+    box-shadow: 0 0 15px #ffd700;
+    transform: scale(1.05);
+}
+
+.player.dealer:after {
+    content: "D";
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background-color: #ffd700;
+    color: black;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.player-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #ffd700;
+    font-size: 1.1rem;
+}
+
+.player-health {
+    color: #ff6b6b;
+    background-color: rgba(255, 107, 107, 0.1);
+    padding: 3px 6px;
+    border-radius: 3px;
+    margin-bottom: 3px;
+}
+
+.player-guess, .player-wins {
+    color: #6bff6b;
+    background-color: rgba(107, 255, 107, 0.1);
+    padding: 3px 6px;
+    border-radius: 3px;
+    margin-bottom: 3px;
+}
+
+.played-card {
+    margin-top: 10px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-img {
+    height: 100%;
+    border-radius: 5px;
+    transition: transform 0.2s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.table-center {
+    background-color: #0f3013;
+    border-radius: 100%;
+    width: 240px;
+    height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 20px 0;
+    position: relative;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3);
+    border: 5px solid #0a230e;
+}
+
+.trump-card {
+    position: absolute;
+    height: 120px;
+    transform: rotate(15deg);
+    border-radius: 5px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.round-info {
+    color: #ffd700;
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-top: 10px;
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 5px 15px;
+    border-radius: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.player-hand {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    min-height: 150px;
+    align-items: center;
+    justify-content: center;
+}
+
+.hand-card {
+    height: 130px;
+    border-radius: 5px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.hand-card.hidden {
+    opacity: 0.9;
+    box-shadow: 0 0 10px rgba(255, 153, 0, 0.6);
+    border: 2px solid #ff9900;
+}
+
+.hand-card:hover {
+    transform: translateY(-15px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+.hand-card.selected {
+    transform: translateY(-25px);
+    box-shadow: 0 0 20px #ffd700;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    max-width: 400px;
+    margin-top: 20px;
+}
+
+button {
+    background-color: #0f3013;
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
+    letter-spacing: 0.5px;
+}
+
+button:hover {
+    background-color: #1c6026;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+}
+
+button:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+}
+
+button:disabled {
+    background-color: #5c5c5c;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.guess-input {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 5px;
+    border: none;
+    margin-bottom: 10px;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal.minimized {
+    background-color: transparent;
+    justify-content: flex-end;
+    align-items: flex-start;
+    pointer-events: none;
+}
+
+.modal.minimized .modal-content {
+    pointer-events: auto;
+    transform: translateY(20px);
+    transition: transform 0.3s;
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.minimize-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+    z-index: 110;
+}
+
+.minimize-btn, .maximize-btn {
+    background-color: #0a230e;
+    border: 2px solid #ffd700;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #ffd700;
+    font-weight: bold;
+    font-size: 18px;
+    padding: 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    line-height: 1;
+    z-index: 120;
+}
+
+.minimize-btn:hover, .maximize-btn:hover {
+    background-color: #156b1e;
+    transform: scale(1.1);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.minimize-btn:active, .maximize-btn:active {
+    transform: scale(0.95);
+}
+
+.minimized .minimize-btn {
+    display: none;
+}
+
+.maximize-btn {
+    display: none;
+}
+
+.minimized .maximize-btn {
+    display: flex;
+}
+
+.minimized .hide-when-minimized {
+    display: none;
+}
+
+.minimized #dealer-restrictions {
+    max-height: 60px;
+    overflow-y: auto;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-content {
+    background-color: #1a5420;
+    padding: 30px;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s;
+    position: relative;
+}
+
+.minimized .modal-content {
+    max-width: 300px;
+    padding: 15px;
+    margin: 10px;
+    opacity: 0.9;
+}
+
+.modal-title {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    color: #ffd700;
+}
+
+.minimized .modal-title {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+}
+
+.minimized .round-summary {
+    display: block;
+    max-height: 0;
+    overflow: hidden;
+}
+
+.minimized .modal-title::after {
+    content: " (minimizado)";
+    font-size: 0.8rem;
+    font-style: italic;
+    color: #aaa;
+}
+
+.minimized #dealer-restrictions {
+    max-height: 60px;
+    overflow-y: auto;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.round-summary {
+    width: 100%;
+    max-width: 600px;
+    margin-top: 20px;
+    background-color: #0f3013;
+    border-radius: 5px;
+    padding: 15px;
+}
+
+.summary-title {
+    text-align: center;
+    margin-bottom: 10px;
+    color: #ffd700;
+}
+
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.summary-table th, .summary-table td {
+    padding: 8px;
+    text-align: center;
+    border-bottom: 1px solid #3b7d3f;
+}
+
+.summary-table th {
+    background-color: #0a230e;
+}
+
+#play-card-btn {
+    font-size: 1.1rem;
+    padding: 15px;
+    background-color: #0d4c14;
+}
+
+#play-card-btn:hover:not(:disabled) {
+    background-color: #156b1e;
+}
+
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 1.4rem;
+    }
+    
+    .game-status {
+        padding: 10px;
+        font-size: 0.9rem;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .game-status > div {
+        flex: 1 0 45%;
+    }
+    
+    .players-container {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .player {
+        width: 100%;
+        min-width: 0;
+        max-width: 250px;
+    }
+    
+    .player-hand {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 5px;
+        padding: 0 5px;
+    }
+    
+    .hand-card {
+        transform-origin: center bottom;
+    }
+    
+    /* Improve card display on small screens */
+    .hand-card, .card-img {
+        height: 110px;
+        width: auto;
+    }
+    
+    /* Improve table center size for small screens */
+    .table-center {
+        width: 180px;
+        height: 180px;
+    }
+    
+    .trump-card {
+        height: 90px;
+    }
+    
+    /* Fix modal display on mobile */
+    .modal-content {
+        width: 90%;
+        max-width: 350px;
+        padding: 15px;
+    }
+    
+    /* Better touch targets for buttons */
+    button {
+        padding: 12px 15px;
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* Improved chat on mobile */
+    .chat-panel, .card-history-panel {
+        width: 100%;
+        max-height: 200px;
+    }
+    
+    /* Improve chat input on mobile */
+    .chat-input-area {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .chat-input-area input {
+        width: 100%;
+    }
+    
+    .chat-input-area button {
+        width: 100%;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    .game-area {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .game-board {
+        padding: 10px;
+        min-height: auto;
+    }
+    
+    .hand-card, .card-img {
+        height: 90px;
+    }
+    
+    .table-center {
+        width: 150px;
+        height: 150px;
+        margin: 10px 0;
+    }
+    
+    .trump-card {
+        height: 80px;
+    }
+    
+    /* Smaller font size on very small screens */
+    body {
+        font-size: 14px;
+    }
+    
+    header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .room-info-bar {
+        flex-direction: column;
+        gap: 5px;
+        align-items: center;
+    }
+}
+
+/* Add pinch-zoom and touch-specific improvements */
+@media (pointer: coarse) {
+    .hand-card {
+        margin: 0 -5px;  /* Overlap cards slightly */
+    }
+    
+    .hand-card.selected {
+        transform: translateY(-15px) scale(1.1);
+    }
+    
+    /* Larger touch targets */
+    .hand-card, .opponent-card {
+        min-height: 44px;
+        min-width: 30px;
+    }
+    
+    /* Fix for touch events */
+    button, .hand-card, .minimize-btn, .maximize-btn {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+.modal-content::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.2);
+    z-index: 110;
+}
+
+.minimized .modal-content::before {
+    display: none;
+}
+
+/* Multiplayer specific styles */
+.room-info-bar {
+    background-color: #0a230e;
+    padding: 8px 15px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.players-online {
+    color: #6bff6b;
+}
+
+.room-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    background-color: #0a230e;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+#room-code {
+    font-weight: bold;
+    color: #ffd700;
+    background-color: #0a230e;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px dashed #ffd700;
+}
+
+#copy-room-code {
+    padding: 5px 10px;
+    font-size: 0.9rem;
+}
+
+.players-list-container {
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.players-list-container h3 {
+    margin-bottom: 10px;
+    color: #ffd700;
+}
+
+#players-list {
+    list-style: none;
+    background-color: #0a230e;
+    border-radius: 5px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+#players-list li {
+    padding: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #3b7d3f;
+}
+
+#players-list li:last-child {
+    border-bottom: none;
+}
+
+.player-ready {
+    color: #6bff6b;
+}
+
+.player-waiting {
+    color: #ff9900;
+}
+
+#waiting-message {
+    text-align: center;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    font-style: italic;
+    color: #aaa;
+}
+
+.current-player-indicator {
+    background-color: rgba(255, 215, 0, 0.2);
+    border-left: 3px solid #ffd700;
+}
+
+/* Animate current player indicator */
+@keyframes currentPlayerPulse {
+    0% { background-color: rgba(255, 215, 0, 0.1); }
+    50% { background-color: rgba(255, 215, 0, 0.3); }
+    100% { background-color: rgba(255, 215, 0, 0.1); }
+}
+
+.current-player-indicator {
+    animation: currentPlayerPulse 2s infinite;
+}
+
+.your-turn-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #6bff6b;
+    margin-right: 8px;
+    animation: yourTurnPulse 1s infinite;
+}
+
+@keyframes yourTurnPulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Additional player card styling for multiplayer */
+.player .player-status {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #6bff6b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+    color: #0a230e;
+}
+
+.player.inactive .player-status {
+    background-color: #ff6b6b;
+}
+
+.player-cards {
+    margin-top: 10px;
+    width: 100%;
+}
+
+.player-cards-title {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.player-cards-container {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.opponent-card {
+    height: 60px;
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s;
+}
+
+.opponent-card:hover {
+    transform: translateY(-5px);
+    z-index: 10;
+}
+
+/* Arrange cards in a fan-like pattern */
+.player-cards-container {
+    position: relative;
+    height: 70px;
+    display: flex;
+    justify-content: center;
+}
+
+.player-cards-container img {
+    position: absolute;
+    transform-origin: bottom center;
+    transition: transform 0.3s ease;
+}
+
+.player-cards-container img:nth-child(1) { transform: rotate(-15deg) translateY(5px); }
+.player-cards-container img:nth-child(2) { transform: rotate(-10deg) translateY(3px); }
+.player-cards-container img:nth-child(3) { transform: rotate(-5deg) translateY(1px); }
+.player-cards-container img:nth-child(4) { transform: rotate(0deg); }
+.player-cards-container img:nth-child(5) { transform: rotate(5deg) translateY(1px); }
+.player-cards-container img:nth-child(6) { transform: rotate(10deg) translateY(3px); }
+.player-cards-container img:nth-child(7) { transform: rotate(15deg) translateY(5px); }
+
+.player-cards-container img:hover {
+    transform: translateY(-10px) scale(1.5) rotate(0deg) !important;
+    z-index: 20;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .opponent-card {
+        height: 40px;
+    }
+    
+    .player-cards-container {
+        height: 50px;
+    }
+}
+
+.minimized .modal-buttons button {
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.minimized #confirm-guess-btn {
+    background-color: #0d4c14;
+    font-weight: bold;
+}
+
+.minimized #confirm-guess-btn:hover {
+    background-color: #156b1e;
+}
+
+/* Card History Panel */
+.card-history-panel {
+    width: 220px;
+    background-color: #1a5420;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    height: 500px;
+}
+
+.card-history-panel h3 {
+    color: #ffd700;
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #3b7d3f;
+}
+
+.history-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+    scrollbar-width: thin;
+    scrollbar-color: #3b7d3f #1a5420;
+}
+
+.history-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.history-content::-webkit-scrollbar-track {
+    background: #1a5420;
+}
+
+.history-content::-webkit-scrollbar-thumb {
+    background-color: #3b7d3f;
+    border-radius: 3px;
+}
+
+.history-empty-message {
+    color: #aaa;
+    font-style: italic;
+    text-align: center;
+    margin-top: 20px;
+}
+
+.play-history-item {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.play-history-round {
+    font-weight: bold;
+    color: #ffd700;
+    margin-bottom: 5px;
+}
+
+.play-history-player {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.play-history-player-name {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.play-history-card-img {
+    height: 40px;
+    border-radius: 3px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Chat Panel */
+.chat-panel {
+    width: 250px;
+    background-color: #1a5420;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    height: 500px;
+}
+
+.chat-panel h3 {
+    color: #ffd700;
+    text-align: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #3b7d3f;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #3b7d3f #1a5420;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #1a5420;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: #3b7d3f;
+    border-radius: 3px;
+}
+
+.chat-message {
+    margin-bottom: 10px;
+    word-break: break-word;
+}
+
+.chat-message-sender {
+    font-weight: bold;
+    color: #ffd700;
+}
+
+.chat-message-text {
+    padding: 6px 10px;
+    background-color: #0f3013;
+    border-radius: 10px;
+    display: inline-block;
+}
+
+.chat-message.own-message .chat-message-sender {
+    color: #6bff6b;
+}
+
+.chat-message.own-message .chat-message-text {
+    background-color: #156b1e;
+}
+
+.system-message {
+    text-align: center;
+    font-style: italic;
+    color: #aaa;
+    margin: 10px 0;
+    font-size: 0.85rem;
+}
+
+.chat-input-area {
+    display: flex;
+    gap: 5px;
+}
+
+.chat-input-area input {
+    flex: 1;
+    padding: 8px;
+    background-color: #0a230e;
+    border: 1px solid #3b7d3f;
+    border-radius: 5px;
+    color: white;
+}
+
+.chat-input-area input::placeholder {
+    color: #aaa;
+}
+
+.chat-input-area button {
+    padding: 8px;
+    font-size: 0.85rem;
+}
+
+/* Responsive styles for game area */
+@media (max-width: 1200px) {
+    .game-area {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .card-history-panel, .chat-panel {
+        width: 100%;
+        max-width: 700px;
+        height: auto;
+        margin-bottom: 20px;
+        max-height: 300px;
+    }
+    
+    .chat-panel {
+        order: 3; /* Place the chat at the bottom */
+    }
+    
+    .card-history-panel {
+        order: 1; /* Place the history at the top */
+    }
+    
+    .game-board {
+        order: 2; /* Place the game board in the middle */
+    }
+}
+
+/* Player guess HUD styling */
+.player-guess-hud {
+    background-color: rgba(15, 48, 19, 0.7);
+    padding: 8px 15px;
+    border-radius: 5px;
+    margin-top: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 3px solid #ffd700;
+}
+
+.player-guess-hud span {
+    color: #ffd700;
+    font-weight: bold;
+    margin: 0 5px;
+}
+
+@media (max-width: 768px) {
+    .player-guess-hud {
+        font-size: 0.9rem;
+        padding: 6px 10px;
+    }
+}
+
+/* Sound toggle button */
+.sound-toggle {
+    margin-left: auto;
+}
+
+#sound-toggle-btn {
+    background-color: transparent;
+    border: none;
+    color: #ffd700;
+    font-size: 1.2rem;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+    box-shadow: none;
+}
+
+#sound-toggle-btn:hover {
+    transform: scale(1.2);
+    background-color: transparent;
+}
+
+#sound-toggle-btn.muted {
+    color: #aaa;
+}
+
+/* Touch-specific styling */
+.touch-device .hand-card {
+    margin: 0 -10px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.touch-device .hand-card.selected {
+    transform: translateY(-20px);
+    box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+    border: 2px solid #ffd700;
+}
+
+.touch-device button, 
+.touch-device .card-img, 
+.touch-device .hand-card,
+.touch-device .modal-buttons button {
+    padding: 15px 20px;
+    margin: 5px;
+}
+
+.touch-device input[type="text"],
+.touch-device input[type="number"] {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    padding: 12px;
+    height: 44px;
+}
+
+.touch-device .modal-content {
+    padding: 25px 15px;
+}
+
+.touch-device .modal-buttons {
+    margin-top: 20px;
+}
+
+.touch-device .chat-input-area {
+    padding: 10px;
+}
+
+/* Screen orientation support */
+@media screen and (orientation: landscape) and (max-height: 600px) {
+    .table-center {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .trump-card {
+        height: 80px;
+    }
+    
+    .players-container {
+        flex-direction: row;
+    }
+    
+    .player {
+        max-width: 200px;
+    }
+    
+    .modal-content {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .game-status {
+        padding: 5px 10px;
+        font-size: 0.9rem;
+    }
+} 
