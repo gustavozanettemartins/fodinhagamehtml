@@ -36,6 +36,11 @@ class Game {
         this.isGameStarted = false;
         this.cardHistory = [];
         this.lastPlayedCard = null;
+        this.lobbyAcceptances = new Set(); // Set of player IDs who accepted
+    }
+
+    resetLobbyAcceptances() {
+        this.lobbyAcceptances.clear();
     }
 
     addPlayer(player) {
@@ -525,9 +530,21 @@ io.on('connection', (socket) => {
         console.log(`- persistentId: ${persistentId || 'N/A'}, previousSocketId: ${previousSocketId || 'N/A'}, isReconnecting: ${!!isReconnecting}`);
     
         // Create the game if it doesn't exist yet
-        if (!gameRooms[roomId]) {
+        /*if (!gameRooms[roomId]) {
             gameRooms[roomId] = new Game(roomId);
             console.log(`New room created: ${roomId}`);
+        }
+        const game = gameRooms[roomId];*/
+
+        if (!gameRooms[roomId] && !isReconnecting) {
+            gameRooms[roomId] = new Game(roomId);
+            console.log(`New room created: ${roomId}`);
+        } else if (!gameRooms[roomId] && isReconnecting) {
+            console.log(`Room ${roomId} exists but has no players`);
+            return;
+            // gameRooms[roomId].reset(); // Example action
+        } else {
+            console.log(`Room ${roomId} exists and has players`);
         }
         const game = gameRooms[roomId];
     
@@ -949,6 +966,65 @@ io.on('connection', (socket) => {
             message: error.message || 'An error occurred during synchronization',
             code: error.code || 'SYNC_FAILED'
         });
+    });
+
+    socket.on('leaveRoom', ({ roomId }) => {
+        if (!roomId || !gameRooms[roomId]) return;
+        const game = gameRooms[roomId];
+        // Remove the player
+        game.removePlayer(socket.id);
+        // Notify the room
+        io.to(roomId).emit('playerLeft', {
+            playerName: socket.playerName,
+            players: game.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                isReady: p.isReady
+            })),
+            roomId
+        });
+        // Leave the room
+        socket.leave(roomId);
+        // Optionally: If room is empty, delete it
+        if (game.players.length === 0) {
+            delete gameRooms[roomId];
+        }
+        // Clean up the socket's memory
+        delete socket.roomId;
+    });
+
+    socket.on('acceptReturnToLobby', ({ roomId }) => {
+        const game = gameRooms[roomId];
+        if (!game) return;
+
+        // Add player to the set
+        game.lobbyAcceptances.add(socket.id);
+
+        // Notify everyone about current acceptances
+        io.to(roomId).emit('lobbyAcceptanceUpdate', {
+            accepted: Array.from(game.lobbyAcceptances),
+            total: game.players.map(p => p.id),
+        });
+
+        // If all players have accepted, reset the game
+        const aliveIds = game.players.map(p => p.id);
+        const allAccepted = aliveIds.every(id => game.lobbyAcceptances.has(id));
+        if (allAccepted) {
+            game.resetLobbyAcceptances();
+            // Reset game to lobby state
+            game.phase = 'waiting';
+            game.isGameStarted = false;
+            game.players.forEach(p => p.isReady = false);
+            io.to(roomId).emit('returnToLobby');
+            io.to(roomId).emit('playerJoined', {
+                players: game.players.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    isReady: p.isReady
+                })),
+                roomId
+            });
+        }
     });
 });
 
