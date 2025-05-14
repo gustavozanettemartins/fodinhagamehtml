@@ -27,6 +27,21 @@ const soundEffects = {
     roundFinished: new Audio('sounds/round-finished.mp3')
 };
 
+// Função para garantir que as propriedades essenciais do jogador existam
+function ensurePlayerProperties(player) {
+    // Garantir que todas as propriedades essenciais do jogador existam
+    if (!player) return player;
+    
+    // Definir valores padrão para propriedades essenciais, se ausentes
+    player.score = player.score !== null && player.score !== undefined ? player.score : 5;
+    player.hand = player.hand || [];
+    player.guess = player.guess !== undefined ? player.guess : null;
+    player.wins = player.wins || 0;
+    player.playedCard = player.playedCard || null;
+    
+    return player;
+}
+
 // Preload sounds
 function preloadSounds() {
     for (const sound in soundEffects) {
@@ -100,6 +115,7 @@ const tableRoundEl = document.getElementById('table-round');
 const summaryTableBodyEl = document.getElementById('summary-body');
 const winnerTextEl = document.getElementById('winner-text');
 const cardHistoryEl = document.getElementById('card-history');
+const tableCardsEl = document.getElementById('table-played-cards'); // Novo elemento para cartas na mesa
 
 // Chat elements
 const chatMessagesEl = document.getElementById('chat-messages');
@@ -110,6 +126,377 @@ const sendChatBtn = document.getElementById('send-chat-btn');
 let minimizeButtons;
 let maximizeButtons;
 
+// Variável para armazenar o ID persistente do jogador
+let persistentPlayerId = null;
+
+// Função para gerar um ID único para o jogador
+function generateUniqueId() {
+    // Gerar ID baseado em timestamp e números aleatórios
+    const timestamp = new Date().getTime();
+    const random = Math.floor(Math.random() * 1000000);
+    return `player_${timestamp}_${random}`;
+}
+
+// Função para obter o ID persistente do jogador
+function getPersistentPlayerId() {
+    // Verificar se já temos um ID armazenado no localStorage
+    let id = localStorage.getItem('fodinhaPersistentId');
+    
+    // Se não tiver, gerar um novo ID e armazená-lo
+    if (!id) {
+        id = generateUniqueId();
+        localStorage.setItem('fodinhaPersistentId', id);
+        console.log('Novo ID persistente gerado:', id);
+    } else {
+        console.log('ID persistente recuperado do localStorage:', id);
+    }
+    
+    return id;
+}
+
+// Atualize a função saveSessionState para incluir o estado dos modais
+function saveSessionState() {
+    // Get modal states
+    const modalStates = {
+        guessModalOpen: guessModal.style.display === 'flex',
+        roundSummaryOpen: roundSummaryModal.style.display === 'flex',
+        guessModalMinimized: modalPreferences.guessModalMinimized,
+        roundSummaryMinimized: modalPreferences.roundSummaryMinimized
+    };
+    
+    // Ensure we have a persistent ID
+    if (!persistentPlayerId) {
+        persistentPlayerId = getPersistentPlayerId();
+    }
+    
+    const sessionData = {
+        socketId: playerId,          // Current socket ID
+        persistentId: persistentPlayerId, // Persistent player ID
+        playerName: playerName,
+        roomId: roomId,
+        isPlayerReady: isPlayerReady,
+        modalStates: modalStates,
+        timestamp: new Date().getTime()
+    };
+    
+    localStorage.setItem('fodinhaSession', JSON.stringify(sessionData));
+    console.log('Session saved with modal states and persistent ID:', sessionData);
+}
+
+// Função para carregar o estado da sessão do localStorage com validações adicionais
+function loadSessionState() {
+    const savedSession = localStorage.getItem('fodinhaSession');
+    if (!savedSession) return null;
+    
+    try {
+        const sessionData = JSON.parse(savedSession);
+        
+        // Check if session is expired (30 minutes)
+        const now = new Date().getTime();
+        const sessionAge = now - sessionData.timestamp;
+        const maxSessionAge = 30 * 60 * 1000; // 30 minutes
+        
+        if (sessionAge > maxSessionAge) {
+            console.log('Session expired, removing...');
+            localStorage.removeItem('fodinhaSession');
+            return null;
+        }
+        
+        // Additional validation of session data
+        if (!sessionData.roomId || !sessionData.playerName) {
+            console.error('Invalid session data:', sessionData);
+            localStorage.removeItem('fodinhaSession');
+            return null;
+        }
+        
+        console.log('Valid session loaded:', {
+            playerName: sessionData.playerName,
+            roomId: sessionData.roomId,
+            socketId: sessionData.socketId,
+            persistentId: sessionData.persistentId,
+            age: `${Math.round(sessionAge / 1000)}s ago`
+        });
+        
+        return sessionData;
+    } catch (e) {
+        console.error('Error loading session:', e);
+        localStorage.removeItem('fodinhaSession');
+        return null;
+    }
+}
+
+// Função para limpar a sessão quando o jogador sair voluntariamente
+function clearSessionState() {
+    localStorage.removeItem('fodinhaSession');
+    console.log('Sessão removida');
+}
+
+// Função para mostrar a overlay de reconexão
+function showReconnectingOverlay() {
+    // Remove any existing overlay first
+    const existingOverlay = document.querySelector('.reconnecting-overlay');
+    if (existingOverlay) {
+        document.body.removeChild(existingOverlay);
+    }
+    
+    // Create the reconnection overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'reconnecting-overlay';
+    
+    overlay.innerHTML = `
+        <div class="reconnecting-box">
+            <div class="reconnecting-spinner"></div>
+            <h3>Reconnecting to game</h3>
+            <p>Attempting to reconnect to your previous game...</p>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    return overlay;
+}
+
+// Função para remover a overlay de reconexão
+function hideReconnectingOverlay() {
+    const overlay = document.querySelector('.reconnecting-overlay');
+    if (overlay) {
+        // Add fade-out class
+        overlay.classList.add('fade-out');
+        
+        // Remove after animation
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }, 500);
+    }
+}
+
+// Função para sair do jogo voluntariamente
+function leaveGame() {
+    if (confirm("Tem certeza que deseja sair do jogo?")) {
+        // Notificar o servidor
+        if (socket && socket.connected && roomId) {
+            socket.emit('leaveRoom', { roomId: roomId });
+        }
+        
+        // Limpar dados de sessão
+        clearSessionState();
+        
+        // Redirecionamento para a página inicial
+        window.location.href = window.location.pathname;
+    }
+}
+
+// Adicione esta função para restaurar o estado dos modais após a reconexão
+function restoreModalStates(sessionData) {
+    if (!sessionData || !sessionData.modalStates) return;
+    
+    console.log('Restoring modal states:', sessionData.modalStates);
+    
+    const { modalStates } = sessionData;
+    
+    // Restore minimization preferences
+    if (modalStates.guessModalMinimized !== undefined) {
+        modalPreferences.guessModalMinimized = modalStates.guessModalMinimized;
+    }
+    
+    if (modalStates.roundSummaryMinimized !== undefined) {
+        modalPreferences.roundSummaryMinimized = modalStates.roundSummaryMinimized;
+    }
+    
+    // IMPORTANT ADDITION: Force restoration of modals that were open
+    if (modalStates.guessModalOpen === true) {
+        console.log('Guess modal was open before refresh, forcing reopening...');
+        
+        // Don't show immediately, wait for gameState to be loaded
+        setTimeout(() => {
+            if (gameState && gameState.phase === 'guess') {
+                console.log('Forcing guess modal reopening after delay');
+                showGuessModal();
+                
+                // Check if the modal was actually opened
+                setTimeout(() => {
+                    if (guessModal.style.display !== 'flex') {
+                        console.warn('First attempt to force modal failed, trying again...');
+                        showGuessModal();
+                    }
+                }, 500);
+            }
+        }, 1000);
+    }
+    
+    if (modalStates.roundSummaryOpen === true) {
+        console.log('Round summary modal was open before refresh, forcing reopening...');
+        
+        // Wait for gameState to be loaded
+        setTimeout(() => {
+            if (gameState && gameState.phase === 'roundEnd') {
+                console.log('Forcing round summary modal reopening after delay');
+                showRoundSummary();
+            }
+        }, 1000);
+    }
+}
+
+// Função para verificar e mostrar os modais necessários após o gameState ser atualizado
+function checkAndShowModals() {
+    if (!gameState) {
+        console.log('No gameState, cannot check modals');
+        return;
+    }
+    
+    console.log(`Checking modals: Phase=${gameState.phase}, IsCurrentPlayer=${isCurrentPlayer()}`);
+    
+    // Check if any modal was open in previous session
+    const savedSession = loadSessionState();
+    const hadGuessModalOpen = savedSession?.modalStates?.guessModalOpen === true;
+    
+    // Close all modals first to avoid overlaps
+    // But remember which were open for debug
+    const guessWasOpen = guessModal.style.display === 'flex';
+    const summaryWasOpen = roundSummaryModal.style.display === 'flex';
+    const gameOverWasOpen = gameOverModal.style.display === 'flex';
+    
+    // Check if guess modal should be shown
+    if (gameState.phase === 'guess' && (isCurrentPlayer() || hadGuessModalOpen)) {
+        console.log(`It's guess phase and ${isCurrentPlayer() ? 'it\'s player\'s turn' : 'modal was open before'}, showing guess modal`);
+        
+        if (!guessWasOpen) {
+            showGuessModal();
+        } else {
+            console.log('Guess modal was already open');
+        }
+    } 
+    // Check if round summary should be shown
+    else if (gameState.phase === 'roundEnd') {
+        console.log('It\'s round end phase, showing summary');
+        if (!summaryWasOpen) {
+            showRoundSummary();
+        } else {
+            console.log('Summary modal was already open');
+        }
+    } 
+    // Check if game over should be shown
+    else if (gameState.phase === 'gameOver') {
+        console.log('It\'s game over phase, showing game over modal');
+        if (!gameOverWasOpen) {
+            showGameOver();
+        } else {
+            console.log('Game over modal was already open');
+        }
+    } else {
+        console.log(`No modal needed for phase ${gameState.phase} with isCurrentPlayer=${isCurrentPlayer()}`);
+        
+        // If it's guess phase but not player's turn, ensure modal is closed
+        // EXCEPT if the modal was open before refresh
+        if (gameState.phase === 'guess' && !isCurrentPlayer() && guessWasOpen && !hadGuessModalOpen) {
+            console.log('Closing guess modal because it\'s not player\'s turn and wasn\'t open before');
+            guessModal.style.display = 'none';
+        }
+    }
+    
+    // Add debug message
+    console.log('Current modal states after check:', {
+        guessModal: guessModal.style.display,
+        roundSummaryModal: roundSummaryModal.style.display,
+        gameOverModal: gameOverModal.style.display
+    });
+}
+
+function forceModalAfterReconnect() {
+    // Obter a sessão salva
+    const savedSession = loadSessionState();
+    if (!savedSession || !savedSession.modalStates) return;
+    
+    console.log('Verificando modais para força após reconexão:', savedSession.modalStates);
+    
+    // Verificar se o modal de palpites estava aberto antes
+    if (savedSession.modalStates.guessModalOpen === true && gameState && gameState.phase === 'guess') {
+        console.log('*** IMPORTANTE: Forçando reabertura do modal de palpites após reconexão ***');
+        
+        // Tentar várias vezes para garantir
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        const tryOpen = () => {
+            attempts++;
+            
+            // Verificar se o modal já está aberto
+            if (guessModal.style.display === 'flex') {
+                console.log('Modal de palpites já está aberto, não é necessário forçar');
+                return;
+            }
+            
+            // Tentar abrir o modal
+            console.log(`Tentativa ${attempts} de abrir o modal de palpites`);
+            showGuessModal();
+            
+            // Verificar se funcionou
+            if (guessModal.style.display !== 'flex' && attempts < maxAttempts) {
+                // Tentar novamente após um delay
+                setTimeout(tryOpen, 1000);
+            }
+        };
+        
+        // Iniciar tentativas com um pequeno delay
+        setTimeout(tryOpen, 2000);
+    }
+}
+
+// Adicione esta função para forçar a verificação de modais periodicamente após reconexão
+// Coloque-a após a função checkAndShowModals() existente
+
+let modalCheckInterval = null;
+
+function scheduleModalChecks() {
+    // Clear any existing interval first
+    if (modalCheckInterval) {
+        clearInterval(modalCheckInterval);
+        modalCheckInterval = null;
+    }
+    
+    // Set up 10 checks with 1 second interval
+    let checksRemaining = 10;
+    
+    modalCheckInterval = setInterval(() => {
+        console.log(`Periodic modal check (${checksRemaining} remaining)`);
+        
+        // Check if we have received game state
+        if (gameState) {
+            // Check if any modal needs to be shown
+            checkAndShowModals();
+            
+            // If player is in guess phase and it's their turn, force show modal
+            if (gameState.phase === 'guess' && isCurrentPlayer() && guessModal.style.display !== 'flex') {
+                console.log('FORCING guess modal open in periodic check');
+                showGuessModal();
+            }
+            
+            // Check if we found and displayed the correct modal
+            if ((gameState.phase === 'guess' && isCurrentPlayer() && guessModal.style.display === 'flex') || 
+                (gameState.phase === 'roundEnd' && roundSummaryModal.style.display === 'flex') ||
+                (gameState.phase === 'gameOver' && gameOverModal.style.display === 'flex')) {
+                
+                console.log('Correct modal found, stopping periodic checks');
+                clearInterval(modalCheckInterval);
+                modalCheckInterval = null;
+                return;
+            }
+        }
+        
+        // Reduce remaining checks count
+        checksRemaining--;
+        
+        // Stop checks after the defined number of attempts
+        if (checksRemaining <= 0) {
+            console.log('Maximum number of modal checks reached');
+            clearInterval(modalCheckInterval);
+            modalCheckInterval = null;
+        }
+    }, 1000); // Check every 1 second
+}
+
 // Function to detect if the device is a mobile/touch device
 function isTouchDevice() {
     return (('ontouchstart' in window) ||
@@ -119,14 +506,79 @@ function isTouchDevice() {
 
 // Socket.io initialization
 function initializeSocket() {
+    // Conectar ao servidor Socket.IO
     socket = io();
     
     // Socket event listeners
     socket.on('connect', () => {
         playerId = socket.id;
         console.log('Connected to server with ID:', playerId);
+        
+        // Add a ping/pong mechanism to keep connection alive
+        setInterval(() => {
+            if (roomId) { // Only ping if we're in a room
+                socket.emit('ping');
+            }
+        }, 30000);
+        
+        // Check if there's a saved session
+        const savedSession = loadSessionState();
+        if (savedSession && !roomId) {
+            console.log('Attempting to reconnect using saved session:', savedSession);
+            
+            // Restore session data
+            playerName = savedSession.playerName;
+            
+            // Use the improved reconnection attempt function
+            attemptReconnect(savedSession);
+            
+            // Monitor reconnection success
+            monitorReconnectionSuccess();
+            
+            // Add system message
+            addSystemMessage(`Attempting to reconnect as ${savedSession.playerName}...`);
+        }
     });
     
+    // Adicionar um handler específico para eventos de palpite
+    socket.on('awaitingGuess', (data) => {
+        console.log('Servidor solicitando palpite:', data);
+        
+        // Verificar se é a nossa vez de dar palpite
+        if (data.playerId === playerId) {
+            console.log('Solicitando diretamente palpite para este jogador');
+            
+            // Mostrar o modal de palpite imediatamente
+            // Pequeno timeout para garantir que o estado do jogo já foi atualizado
+            setTimeout(() => {
+                showGuessModal();
+            }, 100);
+        }
+    });
+
+    // Adicionar um evento específico para a fase do jogo
+    socket.on('phaseChanged', (data) => {
+        console.log('Fase do jogo alterada:', data);
+        
+        // Atualizar a fase no gameState
+        if (gameState) {
+            gameState.phase = data.phase;
+        }
+        
+        // Se for a fase de palpite e for a nossa vez, mostrar o modal
+        if (data.phase === 'guess' && data.currentPlayer === playerId) {
+            console.log('Fase alterada para palpites e é a nossa vez');
+            setTimeout(() => {
+                showGuessModal();
+            }, 200);
+        }
+        
+        // Verificar todos os modais após mudança de fase
+        setTimeout(() => {
+            checkAndShowModals();
+        }, 300);
+    });
+
     socket.on('playerJoined', (data) => {
         console.log('Player joined:', data);
         updatePlayersList(data.players);
@@ -135,14 +587,72 @@ function initializeSocket() {
         roomCodeDisplay.textContent = roomId;
         playersCountDisplay.textContent = data.players.length;
         
+        // Verificar se estamos reconectando
+        const savedSession = loadSessionState();
+        const isReconnecting = savedSession && data.playerName === savedSession.playerName;
+        
+        // Esconder a overlay de reconexão se estiver presente
+        hideReconnectingOverlay();
+        
         // Add system message to chat
-        addSystemMessage(`${data.playerName} entrou na sala.`);
+        if (isReconnecting) {
+            addSystemMessage(`Você se reconectou à sala.`);
+            
+            // Restaurar o estado de "pronto"
+            if (savedSession.isPlayerReady && !isPlayerReady) {
+                console.log("Restaurando estado de 'pronto':", savedSession.isPlayerReady);
+                isPlayerReady = savedSession.isPlayerReady;
+                
+                // Atualizar o texto do botão
+                if (playerReadyBtn) {
+                    playerReadyBtn.textContent = isPlayerReady ? 'Aguardando' : 'Pronto';
+                }
+                
+                // Notificar o servidor sobre o estado de "pronto"
+                socket.emit('playerReady', { ready: isPlayerReady });
+            }
+            
+            // Restaurar preferências de modais
+            restoreModalStates(savedSession);
+            
+            // Solicitar sincronização completa
+            console.log('Solicitando sincronização completa após reconexão');
+            setTimeout(() => {
+                socket.emit('requestFullSync');
+            }, 500);
+        } else {
+            addSystemMessage(`${data.playerName} entrou na sala.`);
+        }
+        
+        // Atualizar a sessão salva com os novos dados
+        saveSessionState();
+        
+        // Request game state after joining a room
+        if (data.playerName === playerName) {
+            console.log("I joined a room, requesting game state");
+            setTimeout(() => {
+                socket.emit('requestGameState');
+            }, 500);
+        }
     });
     
     socket.on('playerUpdate', (data) => {
         console.log('Player update:', data);
+        
+        // Update player list
         updatePlayersList(data.players);
         playersCountDisplay.textContent = data.players.length;
+        
+        // Check our own ready status in case the server didn't register it
+        const ourPlayer = data.players.find(p => p.id === playerId);
+        if (ourPlayer && ourPlayer.isReady !== isPlayerReady) {
+            console.log("Our ready status is out of sync. Server:", ourPlayer.isReady, "Client:", isPlayerReady);
+            isPlayerReady = ourPlayer.isReady;
+            playerReadyBtn.textContent = isPlayerReady ? 'Aguardando' : 'Pronto';
+        }
+        
+        // Atualizar a sessão quando houver atualização de jogadores
+        saveSessionState();
     });
     
     socket.on('playerLeft', (data) => {
@@ -157,10 +667,31 @@ function initializeSocket() {
     socket.on('gameState', (data) => {
         console.log('Game state update:', data);
         
+        // Add timestamp to track state updates
+        data.lastStateUpdate = new Date().getTime();
+        
+        // Garantir que os jogadores tenham todas as propriedades necessárias
+        if (data.players && Array.isArray(data.players)) {
+            data.players = data.players.map(player => {
+                player = ensurePlayerProperties(player);
+                
+                // Fix for guess being an object
+                if (player.guess !== null && typeof player.guess === 'object' && player.guess.guess !== undefined) {
+                    player.guess = player.guess.guess;
+                }
+                
+                return player;
+            });
+        }
+        
         // Play card shuffle sound when entering a new round (guess phase)
         if (gameState && gameState.phase !== 'guess' && data.phase === 'guess' && data.semiRounds === 0) {
             playSound('cardShuffle');
         }
+        
+        // Guardar valor da fase anterior para comparação
+        const previousPhase = gameState ? gameState.phase : null;
+        const wasCurrentPlayer = gameState ? isCurrentPlayer() : false;
         
         gameState = data;
         
@@ -170,15 +701,20 @@ function initializeSocket() {
         
         updateGameUI();
         
-        // Handle phase transitions
-        if (data.phase === 'guess' && isCurrentPlayer()) {
-            showGuessModal();
-        } else if (data.phase === 'roundEnd') {
-            playSound('roundFinished');
-            showRoundSummary();
-        } else if (data.phase === 'gameOver') {
-            showGameOver();
+        // Salvar a sessão quando o estado do jogo for atualizado
+        saveSessionState();
+        
+        // Verificar se acabamos de reconectar (se não havia gameState antes)
+        const isReconnecting = previousPhase === null && gameState !== null;
+        
+        // Se estamos reconectando ou mudou a fase do jogo, verificar se precisa mostrar modais
+        if (isReconnecting || previousPhase !== gameState.phase || (wasCurrentPlayer !== isCurrentPlayer())) {
+            console.log('Reconectando ou mudança de fase/turno detectada, verificando modais');
+            checkAndShowModals();
         }
+        
+        // Remover overlay de reconexão se ainda estiver presente
+        hideReconnectingOverlay();
         
         // Play card sound if someone just played a card
         if (data.lastPlayedCard && 
@@ -208,12 +744,292 @@ function initializeSocket() {
         
         // Add system message to chat
         addSystemMessage("Jogo reiniciado. Aguardando jogadores ficarem prontos.");
+        
+        // Manter a sessão após reset, apenas atualizar o estado
+        saveSessionState();
     });
     
     // Chat message received
     socket.on('chatMessage', (data) => {
         console.log('Chat message received:', data);
         addChatMessage(data.sender, data.message, data.senderId === playerId);
+    });
+    
+    // Este event handler trata quando o servidor forçar a desconexão
+    socket.on('forceDisconnect', (data) => {
+        console.log('Forçado a desconectar:', data);
+        
+        // Limpar a sessão
+        clearSessionState();
+        
+        // Recarregar a página
+        alert(data.message || "Você foi desconectado do servidor.");
+        window.location.reload();
+    });
+    
+    // Add additional reconnection logic
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server, attempting to reconnect...');
+        
+        // Tenta salvar a sessão atual
+        if (roomId && playerName) {
+            saveSessionState();
+        }
+        
+        // Try to reconnect after a delay
+        setTimeout(() => {
+            socket.connect();
+            
+            // Rejoin the room if we were in one
+            if (roomId && playerName) {
+                setTimeout(() => {
+                    socket.emit('joinRoom', { 
+                        playerName, 
+                        roomId: roomId 
+                    });
+                }, 1000);
+            }
+        }, 3000);
+        
+        // Show a message to the user
+        addSystemMessage("Conexão perdida. Tentando reconectar...");
+    });
+    
+    socket.on('reconnect', () => {
+        console.log('Reconnected to server');
+        addSystemMessage("Reconectado ao servidor!");
+        
+        // Only request game state if we're in a room
+        if (roomId) {
+            setTimeout(() => {
+                socket.emit('requestGameState');
+                
+                // Verificar o estado dos modais após obter gameState
+                setTimeout(() => {
+                    console.log('Verificando modais após reconexão');
+                    checkAndShowModals();
+                }, 1500); // Pequeno delay para garantir que gameState foi recebido
+            }, 1000);
+        }
+    });
+
+    // Add a specific handler for game start to ensure we transition from waiting room
+    socket.on('gameStart', (data) => {
+        console.log('Game started:', data);
+        
+        // Hide waiting room
+        waitingRoomModal.style.display = 'none';
+        
+        // Add system message
+        addSystemMessage("O jogo começou!");
+        
+        // Request game state
+        socket.emit('requestGameState');
+        
+        // Salvar a sessão quando o jogo começa
+        saveSessionState();
+    });
+    
+    // Error handling
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
+        addSystemMessage(`Erro: ${error.message || 'Ocorreu um erro de conexão'}`);
+    });
+    
+    // Room-specific errors
+    socket.on('roomError', (data) => {
+        console.error('Room error:', data);
+        alert(data.message || "Erro ao entrar na sala");
+        
+        // Se houver erro ao entrar na sala usando uma sessão salva, limpar a sessão
+        const savedSession = loadSessionState();
+        if (savedSession && savedSession.roomId === data.roomId) {
+            console.log('Erro ao reconectar usando sessão salva, limpando sessão...');
+            clearSessionState();
+        }
+    });
+
+    socket.on('currentPlayerUpdate', (data) => {
+        console.log('Atualização de jogador atual recebida:', data);
+        
+        // Verificar se temos gameState
+        if (!gameState) {
+            console.warn('Recebido currentPlayerUpdate mas gameState é null');
+            return;
+        }
+        
+        // Atualizar informações do jogador atual
+        gameState.currentPlayerIndex = data.currentPlayerIndex;
+        gameState.phase = data.phase;
+        
+        // Atualizar UI
+        updateGameUI();
+        
+        // Verificar se precisa mostrar modais
+        checkAndShowModals();
+    });
+    
+    // Adicionar handler para evento de espera por palpite
+    socket.on('awaitingGuess', (data) => {
+        console.log('Servidor solicitando palpite:', data);
+        
+        // Verificar se é nossa vez
+        if (data.playerId === playerId) {
+            // Forçar exibição do modal de palpite
+            console.log('Forçando exibição do modal de palpite por solicitação do servidor');
+            showGuessModal();
+        }
+    });
+    
+    // Adicionar handler para evento de sua vez de jogar
+    socket.on('yourTurn', (data) => {
+        console.log('É sua vez de jogar:', data);
+        
+        // Atualizar interface para indicar que é a vez do jogador
+        if (waitingMessageEl) {
+            waitingMessageEl.style.display = 'none';
+        }
+        
+        // Atualizar UI para refletir que é a vez do jogador
+        updateGameUI();
+    });
+    
+    // Adicionar handler para resposta de sincronização completa
+    socket.on('fullSyncResponse', (data) => {
+        console.log('Full sync response received:', data);
+        
+        // Update gameState with received data
+        gameState = data.gameState;
+        
+        // If we have cards, update them
+        if (data.gameState.hand) {
+            playerHand = data.gameState.hand;
+        }
+        
+        // Update game UI
+        updateGameUI();
+        
+        // Check if modals need to be shown
+        checkAndShowModals();
+        
+        // If it's this player's turn, additional checks
+        if (data.isYourTurn) {
+            console.log('Sync confirms it\'s my turn to play');
+            
+            // Check phase to show appropriate modal
+            if (gameState.phase === 'guess') {
+                showGuessModal();
+            }
+        }
+    });
+
+    socket.on('syncError', (error) => {
+        console.error('Sync error received:', error);
+        addSystemMessage(`Sync error: ${error.message}. Attempting to automatically reconnect...`);
+        
+        // Show overlay with problem
+        const errorOverlay = document.createElement('div');
+        errorOverlay.className = 'reconnecting-overlay';
+        errorOverlay.innerHTML = `
+            <div class="reconnecting-box">
+                <h3>Synchronization Problem</h3>
+                <p>${error.message}</p>
+                <p>Attempting to recover connection...</p>
+                <div class="reconnecting-spinner"></div>
+                <button id="force-reload-btn" style="margin-top: 20px; padding: 10px 20px;">Reload Game</button>
+            </div>
+        `;
+        document.body.appendChild(errorOverlay);
+        
+        // Add function for reload button
+        document.getElementById('force-reload-btn').addEventListener('click', () => {
+            window.location.reload();
+        });
+        
+        // Try to recover session again
+        setTimeout(() => {
+            // Check if we still have roomId
+            if (roomId) {
+                console.log('Attempting to recover session after sync error...');
+                
+                // Request game state again
+                socket.emit('requestGameState');
+                
+                // Try new sync after longer delay
+                setTimeout(() => {
+                    socket.emit('requestFullSync');
+                }, 1000);
+            }
+        }, 2000);
+    });
+
+    socket.on('gameState', (data) => {
+        console.log('Game state update:', data);
+        
+        // Add timestamp to track state updates
+        data.lastStateUpdate = new Date().getTime();
+        
+        // Ensure players have all required properties
+        if (data.players && Array.isArray(data.players)) {
+            data.players = data.players.map(player => {
+                player = ensurePlayerProperties(player);
+                
+                // Fix for guess being an object
+                if (player.guess !== null && typeof player.guess === 'object' && player.guess.guess !== undefined) {
+                    player.guess = player.guess.guess;
+                }
+                
+                return player;
+            });
+        }
+        
+        // Play card shuffle sound when entering a new round (guess phase)
+        if (gameState && gameState.phase !== 'guess' && data.phase === 'guess' && data.semiRounds === 0) {
+            playSound('cardShuffle');
+        }
+        
+        // Store previous phase value for comparison
+        const previousPhase = gameState ? gameState.phase : null;
+        const wasCurrentPlayer = gameState ? isCurrentPlayer() : false;
+        
+        gameState = data;
+        
+        if (data.hand) {
+            playerHand = data.hand;
+        }
+        
+        updateGameUI();
+        
+        // Save session when game state is updated
+        saveSessionState();
+        
+        // Check if we just reconnected (if there was no gameState before)
+        const isReconnecting = previousPhase === null && gameState !== null;
+        
+        // If we're reconnecting or the game phase changed, check if modals need to be shown
+        if (isReconnecting || previousPhase !== gameState.phase || (wasCurrentPlayer !== isCurrentPlayer())) {
+            console.log('Reconnecting or phase/turn change detected, checking modals');
+            checkAndShowModals();
+        }
+        
+        // Remove reconnection overlay if still present
+        hideReconnectingOverlay();
+        
+        // Play card sound if someone just played a card
+        if (data.lastPlayedCard && 
+            (!gameState.previousLastPlayedCard || 
+             gameState.previousLastPlayedCard.round !== data.lastPlayedCard.round || 
+             gameState.previousLastPlayedCard.semiRound !== data.lastPlayedCard.semiRound ||
+             gameState.previousLastPlayedCard.playerId !== data.lastPlayedCard.playerId)) {
+            
+            // Don't play sound for our own card (we'll play it when we click)
+            if (data.lastPlayedCard.playerId !== playerId) {
+                playSound('cardPlay');
+            }
+            
+            // Store the last played card to avoid duplicate sounds
+            gameState.previousLastPlayedCard = data.lastPlayedCard;
+        }
     });
 }
 
@@ -225,12 +1041,40 @@ function setupEventListeners() {
         const roomIdValue = roomIdInput.value.trim();
         
         if (playerName) {
+            // Show a loading message
+            joinRoomBtn.textContent = "Conectando...";
+            joinRoomBtn.disabled = true;
+            
+            // Garantir que temos um ID persistente
+            if (!persistentPlayerId) {
+                persistentPlayerId = getPersistentPlayerId();
+            }
+            
+            // Log the join request
+            console.log("Joining room with name:", playerName, "room:", roomIdValue || "new room", "persistentId:", persistentPlayerId);
+            
+            // Enviar solicitação com ID persistente
             socket.emit('joinRoom', { 
                 playerName, 
-                roomId: roomIdValue || null 
+                roomId: roomIdValue || null,
+                persistentId: persistentPlayerId
             });
+            
+            // Add a timeout to reset if something goes wrong
+            setTimeout(() => {
+                if (joinRoomModal.style.display !== 'none') {
+                    joinRoomBtn.textContent = "Entrar / Criar Sala";
+                    joinRoomBtn.disabled = false;
+                    addSystemMessage("Erro ao entrar na sala. Tente novamente.");
+                }
+            }, 5000);
+            
+            // Hide the join modal and show waiting room
             joinRoomModal.style.display = 'none';
             waitingRoomModal.style.display = 'flex';
+        } else {
+            // Alert the user that a name is required
+            alert("Por favor, digite seu nome para continuar.");
         }
     });
     
@@ -249,9 +1093,39 @@ function setupEventListeners() {
     
     // Player ready button
     playerReadyBtn.addEventListener('click', () => {
+        console.log("Player ready button clicked, current state:", isPlayerReady);
+        
+        // Toggle ready state
         isPlayerReady = !isPlayerReady;
+        
+        // Update button text
         playerReadyBtn.textContent = isPlayerReady ? 'Aguardando' : 'Pronto';
-        socket.emit('playerReady', { ready: isPlayerReady });
+        
+        // Add visual feedback
+        playerReadyBtn.disabled = true;
+        playerReadyBtn.style.opacity = "0.7";
+        
+        // Log the event we're about to send
+        console.log("Sending playerReady event with value:", isPlayerReady);
+        
+        // Send the ready status to the server - try both formats to ensure compatibility
+        try {
+            // New format (object)
+            socket.emit('playerReady', { ready: isPlayerReady });
+        } catch (e) {
+            console.error("Error with object format:", e);
+            // Old format (boolean)
+            socket.emit('playerReady', isPlayerReady);
+        }
+        
+        // Re-enable the button after a short delay
+        setTimeout(() => {
+            playerReadyBtn.disabled = false;
+            playerReadyBtn.style.opacity = "1";
+        }, 1000);
+        
+        // Add system message
+        addSystemMessage(`Você está ${isPlayerReady ? 'pronto' : 'aguardando'}.`);
     });
     
     // Guess confirm button
@@ -261,18 +1135,26 @@ function setupEventListeners() {
         if (!isNaN(guessValue)) {
             // Check if dealer has restrictions
             if (isDealerPlayer(playerId)) {
-                const totalCards = gameState.round;
+                const totalCards = gameState.currentRound;
+                
+                // Calcular a soma atual dos palpites excluindo o dealer
                 const currentSum = gameState.players.reduce((sum, player) => {
                     return player.id !== playerId && player.guess !== null ? sum + player.guess : sum;
                 }, 0);
                 
-                if (guessValue + currentSum === totalCards) {
+                console.log(`Verificando palpite ${guessValue}, soma atual ${currentSum}, total cartas ${totalCards}`);
+                
+                // Exceção para primeira rodada sem palpites
+                const isFirstRoundWithNoGuesses = (gameState.currentRound === 1 && currentSum === 0);
+                
+                if (guessValue + currentSum === totalCards && !isFirstRoundWithNoGuesses) {
                     alert("Como distribuidor, você não pode dar um palpite que faça o total igual ao número de cartas!");
                     return;
                 }
             }
             
-            socket.emit('makeGuess', { guess: guessValue });
+            // Send just the number, not an object
+            socket.emit('makeGuess', guessValue);
             guessModal.style.display = 'none';
             playSound('guess');
         }
@@ -281,7 +1163,35 @@ function setupEventListeners() {
     // Continue button
     continueBtn.addEventListener('click', () => {
         roundSummaryModal.style.display = 'none';
+        
+        // Send both event types to ensure one works
+        console.log("Attempting to continue to next round...");
+        
+        // Try the first event name (newer servers)
         socket.emit('readyForNextRound');
+        
+        // Also try the second event name (older servers) with a small delay
+        setTimeout(() => {
+            socket.emit('continueToNextRound');
+        }, 100);
+        
+        // Add visual feedback
+        const feedbackMsg = document.createElement('div');
+        feedbackMsg.className = 'system-message';
+        feedbackMsg.textContent = "Aguardando próxima rodada...";
+        chatMessagesEl.appendChild(feedbackMsg);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        
+        // Force update after a delay in case the server doesn't respond
+        setTimeout(() => {
+            // Force a server state request
+            socket.emit('requestGameState');
+            
+            // If we're still showing the summary after 5 seconds, hide it anyway
+            if (roundSummaryModal.style.display === 'flex') {
+                roundSummaryModal.style.display = 'none';
+            }
+        }, 5000);
     });
     
     // New game button
@@ -290,14 +1200,13 @@ function setupEventListeners() {
         waitingRoomModal.style.display = 'flex';
         isPlayerReady = false;
         playerReadyBtn.textContent = 'Pronto';
-        socket.emit('playerReady', { ready: false });
+        socket.emit('restartGame');
     });
     
     // Play card button
     playCardBtn.addEventListener('click', () => {
         if (selectedCardIndex !== null && isCurrentPlayer()) {
-            const card = playerHand[selectedCardIndex];
-            socket.emit('playCard', { cardIndex: selectedCardIndex });
+            socket.emit('playCard', selectedCardIndex);
             playSound('cardPlay');
             selectedCardIndex = null;
             updatePlayerHandUI();
@@ -305,7 +1214,9 @@ function setupEventListeners() {
     });
     
     // Sound toggle button
-    soundToggleBtn.addEventListener('click', toggleSound);
+    if (soundToggleBtn) {
+        soundToggleBtn.addEventListener('click', toggleSound);
+    }
     
     // Chat send button
     sendChatBtn.addEventListener('click', sendChatMessage);
@@ -327,6 +1238,34 @@ function setupEventListeners() {
     
     // Load sound preference from localStorage
     loadSoundPreference();
+
+    // Botão de sair do jogo
+    const leaveGameBtn = document.getElementById('leave-game-btn');
+    if (leaveGameBtn) {
+        leaveGameBtn.addEventListener('click', leaveGame);
+    }
+    
+    // Adicione este listener para a tecla F5 e outros eventos de reload
+    window.addEventListener('beforeunload', function(e) {
+        // Só salvar a sessão se estiver em uma sala
+        if (roomId) {
+            // Salvar a sessão atual
+            saveSessionState();
+            
+            // Não exibir mensagem de confirmação, apenas salvar a sessão
+            // Se quiser exibir uma mensagem, descomente as linhas abaixo
+            // e.preventDefault();
+            // e.returnValue = 'Suas informações de jogo serão salvas, mas alguns navegadores podem não restaurar a sessão corretamente.';
+        }
+    });
+    
+    // Capturar tecla F5 especificamente para mostrar mensagem
+    window.addEventListener('keydown', function(e) {
+        if ((e.key === 'F5' || (e.ctrlKey && e.key === 'r')) && roomId) {
+            console.log('F5 or Ctrl+R key detected, saving session...');
+            saveSessionState();
+        }
+    });
 }
 
 // Function to send chat message
@@ -438,10 +1377,11 @@ function updateGameUI() {
         trumpCardEl.src = '';
     }
     
-    // Update player lives
+    // Update player lives - ADICIONADA VERIFICAÇÃO DE SEGURANÇA
     const selfPlayer = gameState.players.find(p => p.id === playerId);
     if (selfPlayer) {
-        playerLivesEl.textContent = selfPlayer.score;
+        // Garantir que score nunca seja null, usando valor padrão 5
+        playerLivesEl.textContent = selfPlayer.score !== null && selfPlayer.score !== undefined ? selfPlayer.score : 5;
         
         // Add player's guess to the HUD if it exists
         updatePlayerGuessHUD(selfPlayer);
@@ -452,6 +1392,11 @@ function updateGameUI() {
     
     // Update player's hand
     updatePlayerHandUI();
+    
+    // Update cartas na mesa - NOVA FUNÇÃO
+    if (typeof updateTableCards === 'function') {
+        updateTableCards();
+    }
     
     // Update card history
     updateCardHistory();
@@ -480,6 +1425,14 @@ function updatePlayersUI() {
     const otherPlayers = gameState.players.filter(p => p.id !== playerId);
     
     for (const player of otherPlayers) {
+        // Garantir que as propriedades do jogador existam
+        ensurePlayerProperties(player);
+        
+        // Handle guess being an object
+        if (player.guess !== null && typeof player.guess === 'object' && player.guess.guess !== undefined) {
+            player.guess = player.guess.guess;
+        }
+        
         const playerEl = document.createElement('div');
         playerEl.className = 'player';
         
@@ -557,6 +1510,7 @@ function updatePlayerHandUI() {
         }
         
         cardEl.className = 'hand-card';
+        cardEl.dataset.index = i; // Add index data attribute
         
         if (gameState && gameState.firstRound) {
             cardEl.classList.add('hidden');
@@ -591,7 +1545,58 @@ function updatePlayerHandUI() {
     }
 }
 
+// Nova função para atualizar as cartas jogadas na mesa
+function updateTableCards() {
+    if (!tableCardsEl || !gameState) return;
+    
+    tableCardsEl.innerHTML = '';
+    
+    // Obter jogadores vivos que jogaram uma carta nesta rodada
+    const playersWithCards = gameState.players.filter(p => p.score > 0 && p.playedCard);
+    
+    if (playersWithCards.length === 0) return;
+    
+    // Adicionar cada carta à mesa
+    for (const player of playersWithCards) {
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'table-card-container';
+        
+        const cardEl = document.createElement('img');
+        cardEl.src = getCardImagePath(player.playedCard);
+        cardEl.className = 'table-card';
+        cardEl.alt = `Carta de ${player.name}`;
+        
+        const playerNameEl = document.createElement('div');
+        playerNameEl.className = 'table-card-player';
+        playerNameEl.textContent = player.name;
+        
+        // Destacar a carta do jogador da vez
+        if (isPlayerCurrentTurn(player.id)) {
+            cardEl.classList.add('winning');
+        }
+        
+        cardContainer.appendChild(cardEl);
+        cardContainer.appendChild(playerNameEl);
+        tableCardsEl.appendChild(cardContainer);
+    }
+    
+    // Animar as cartas
+    const cards = tableCardsEl.querySelectorAll('.table-card');
+    cards.forEach((card, index) => {
+        const angle = (index - (cards.length - 1) / 2) * 10;
+        card.style.transform = `rotate(${angle}deg)`;
+    });
+}
+
 function showGuessModal() {
+    console.debug('Chamando showGuessModal', {
+        phase: gameState?.phase, 
+        isCurrentPlayer: isCurrentPlayer(),
+        playerName: playerName,
+        currentPlayerName: gameState?.players?.[gameState?.currentPlayerIndex]?.name
+    });
+    
+    // Primeiro definir valores padrão
     guessValueInput.value = '0';
     
     if (gameState && gameState.currentRound) {
@@ -638,7 +1643,20 @@ function showGuessModal() {
     guessValueInput.addEventListener('change', updateConfirmButtonText);
     guessValueInput.addEventListener('keyup', updateConfirmButtonText);
     
+    // MODIFICAÇÃO: Sempre mostrar o modal, sem verificação dupla
     guessModal.style.display = 'flex';
+    console.log('Modal de palpites exibido:', guessModal.style.display);
+    
+    // Log com informações detalhadas para diagnóstico
+    if (gameState && gameState.phase !== 'guess') {
+        console.warn('Atenção: Modal de palpites sendo exibido fora da fase de palpites:', gameState.phase);
+    }
+    if (gameState && !isCurrentPlayer()) {
+        console.warn('Atenção: Modal de palpites sendo exibido quando não é a vez do jogador');
+    }
+    
+    // Salvar o estado de sessão para refletir que o modal está aberto
+    saveSessionState();
     
     // Ensure minimize buttons are properly set up
     ensureMinimizeButtonsSetup();
@@ -651,32 +1669,154 @@ function updateConfirmButtonText() {
 }
 
 function showRoundSummary() {
+    // Limpar o conteúdo da tabela
     summaryTableBodyEl.innerHTML = '';
     
-    // Apply minimization preference
+    // Aplicar minimização se necessário
     if (modalPreferences.roundSummaryMinimized) {
         roundSummaryModal.classList.add('minimized');
     } else {
         roundSummaryModal.classList.remove('minimized');
     }
     
+    // Criar o container principal
+    const summaryContainer = document.createElement('div');
+    summaryContainer.className = 'round-summary-compact';
+    
+    // Cabeçalho com informações da rodada
+    const headerSection = document.createElement('div');
+    headerSection.className = 'round-header-compact';
+    
+    headerSection.innerHTML = `
+        <div class="round-number-compact">Rodada ${gameState.currentRound}</div>
+        <div class="round-info-compact">
+            <div>Fase: <span>${gameState.phase === 'roundEnd' ? 'Fim da Rodada' : gameState.phase}</span></div>
+            <div>Jogadores ativos: <span>${gameState.players.filter(p => p.score > 0).length}</span></div>
+        </div>
+    `;
+    
+    summaryContainer.appendChild(headerSection);
+    
+    // Tabela com os resultados
     if (gameState && gameState.roundDetails) {
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'table-container-compact';
+        
+        const table = document.createElement('table');
+        table.className = 'summary-table-compact';
+        
+        // Cabeçalho da tabela
+        const tableHeader = document.createElement('thead');
+        tableHeader.innerHTML = `
+            <tr>
+                <th>Jogador</th>
+                <th>Palpite</th>
+                <th>Ganhou</th>
+                <th>Dano</th>
+                <th>Vidas</th>
+            </tr>
+        `;
+        
+        // Corpo da tabela
+        const tableBody = document.createElement('tbody');
+        
         for (const [playerId, details] of Object.entries(gameState.roundDetails)) {
+            const name = details.name || "Jogador";
+            
+            // Tratar o palpite corretamente
+            let guessValue = 0;
+            if (details.guessValue !== null && details.guessValue !== undefined) {
+                if (typeof details.guessValue === 'object' && details.guessValue.guess !== undefined) {
+                    guessValue = details.guessValue.guess;
+                } else {
+                    guessValue = details.guessValue;
+                }
+            }
+            
+            const wins = details.wins ?? 0;
+            const damageValue = details.damageValue ?? 0;
+            const health = details.health ?? 0;
+            
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${details.name}</td>
-                <td>${details.guessValue}</td>
-                <td>${details.wins}</td>
-                <td>${details.damageValue}</td>
-                <td>${details.health}</td>
+                <td>${name}</td>
+                <td>${guessValue}</td>
+                <td>${wins}</td>
+                <td><div class="damage-cell">${damageValue}</div></td>
+                <td><div class="health-cell">${health}</div></td>
             `;
-            summaryTableBodyEl.appendChild(row);
+            
+            // Aplicar cores às células de dano e vida
+            const damageCell = row.querySelector('.damage-cell');
+            damageCell.style.backgroundColor = damageValue > 0 ? '#8B4513' : '#2E8B57';
+            
+            const healthCell = row.querySelector('.health-cell');
+            healthCell.style.backgroundColor = '#2E8B57';
+            
+            tableBody.appendChild(row);
         }
+        
+        table.appendChild(tableHeader);
+        table.appendChild(tableBody);
+        tableContainer.appendChild(table);
+        summaryContainer.appendChild(tableContainer);
+        
+        // Seção de resultados da rodada
+        const resultsSection = document.createElement('div');
+        resultsSection.className = 'results-section-compact';
+        resultsSection.innerHTML = '<h3>Resultados da Rodada</h3>';
+        
+        const resultsList = document.createElement('div');
+        resultsList.className = 'results-list-compact';
+        
+        for (const [playerId, details] of Object.entries(gameState.roundDetails)) {
+            const name = details.name || "Jogador";
+            
+            // Tratar o palpite corretamente
+            let guessValue = 0;
+            if (details.guessValue !== null && details.guessValue !== undefined) {
+                if (typeof details.guessValue === 'object' && details.guessValue.guess !== undefined) {
+                    guessValue = details.guessValue.guess;
+                } else {
+                    guessValue = details.guessValue;
+                }
+            }
+            
+            const wins = details.wins ?? 0;
+            const acertou = guessValue === wins;
+            
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item-compact';
+            
+            resultItem.innerHTML = `
+                <span>${name}:</span>
+                <span class="${acertou ? 'result-acerto' : 'result-erro'}">
+                    ${acertou ? 'Acertou o palpite!' : `Errou por ${Math.abs(guessValue - wins)}`}
+                </span>
+            `;
+            
+            resultsList.appendChild(resultItem);
+        }
+        
+        resultsSection.appendChild(resultsList);
+        summaryContainer.appendChild(resultsSection);
+    }
+    
+    // Substituir o conteúdo atual pelo novo container
+    const summaryElement = document.querySelector('.round-summary');
+    summaryElement.innerHTML = '';
+    summaryElement.appendChild(summaryContainer);
+    
+    // Estilizar o botão continuar
+    const continueBtn = document.getElementById('continue-btn');
+    if (continueBtn) {
+        continueBtn.className = 'continue-btn-compact';
+        continueBtn.textContent = 'Continuar para próxima rodada →';
     }
     
     roundSummaryModal.style.display = 'flex';
     
-    // Ensure minimize buttons are properly set up
+    // Garantir que os botões de minimizar estejam configurados
     ensureMinimizeButtonsSetup();
 }
 
@@ -705,9 +1845,22 @@ function hideAllModals() {
 
 // Helper functions
 function isCurrentPlayer() {
-    return gameState && 
-           gameState.players[gameState.currentPlayerIndex] && 
-           gameState.players[gameState.currentPlayerIndex].id === playerId;
+    // Verificar se gameState existe
+    if (!gameState) return false;
+    
+    // Verificar se currentPlayerIndex é válido
+    if (gameState.currentPlayerIndex === undefined || gameState.currentPlayerIndex === null) return false;
+    
+    // Verificar se o array de jogadores existe e tem tamanho suficiente
+    if (!gameState.players || !Array.isArray(gameState.players) || 
+        gameState.players.length <= gameState.currentPlayerIndex) return false;
+    
+    // Verificar se o jogador na posição currentPlayerIndex tem ID
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (!currentPlayer || !currentPlayer.id) return false;
+    
+    // Finalmente, verificar se o ID corresponde ao jogador local
+    return currentPlayer.id === playerId;
 }
 
 function isPlayerCurrentTurn(id) {
@@ -726,23 +1879,40 @@ function calculateDealerAllowedGuesses() {
     if (!gameState) return [0];
     
     const currentRound = gameState.currentRound;
-    const sumGuesses = gameState.sumGuesses || 0;
+    
+    // Calcular a soma real dos palpites no momento atual
+    const sumGuesses = gameState.players.reduce((sum, player) => {
+        // Só contabiliza palpites de jogadores que não são o dealer e já fizeram palpite
+        if (player.id !== playerId && player.guess !== null) {
+            // Lidar com palpite sendo objeto
+            if (typeof player.guess === 'object' && player.guess.guess !== undefined) {
+                return sum + player.guess.guess;
+            } else {
+                return sum + player.guess;
+            }
+        }
+        return sum;
+    }, 0);
+    
+    console.log(`Calculando palpites permitidos: Rodada ${currentRound}, Soma atual ${sumGuesses}`);
     
     if (currentRound === 1) {
         if (sumGuesses > 0) {
+            console.log(`Rodada 1 com palpites: permitido [1]`);
             return [1];
         } else {
+            console.log(`Rodada 1 sem palpites: permitido [0, 1]`);
             return [0, 1];
         }
     } else {
-        if (sumGuesses === currentRound) {
-            return Array.from({length: currentRound}, (_, i) => i + 1);
-        } else if (sumGuesses > currentRound) {
-            return Array.from({length: currentRound + 1}, (_, i) => i);
-        } else {
-            return Array.from({length: currentRound + 1}, (_, i) => i)
-                .filter(n => n + sumGuesses !== currentRound);
-        }
+        // Gerar array com todos os possíveis palpites (0 até currentRound)
+        const possibleGuesses = Array.from({length: currentRound + 1}, (_, i) => i);
+        
+        // Filtrar o valor que somado aos palpites existentes resultaria no número da rodada
+        const allowedGuesses = possibleGuesses.filter(guess => (guess + sumGuesses) !== currentRound);
+        
+        console.log(`Rodada ${currentRound}, palpites permitidos: ${allowedGuesses.join(', ')}`);
+        return allowedGuesses;
     }
 }
 
@@ -905,12 +2075,18 @@ function updatePlayerGuessHUD(player) {
         playerGuessEl.className = 'player-guess-hud';
         
         // Insert it after the player lives element
-        playerLivesEl.parentNode.after(playerGuessEl);
+        playerLivesEl.parentNode.insertBefore(playerGuessEl, playerLivesEl.nextSibling);
+    }
+    
+    // Handle guess being an object
+    let playerGuess = player.guess;
+    if (playerGuess !== null && typeof playerGuess === 'object' && playerGuess.guess !== undefined) {
+        playerGuess = playerGuess.guess;
     }
     
     // Update the content based on guess availability
-    if (player.guess !== null && (gameState.phase === 'play' || gameState.phase === 'roundEnd')) {
-        playerGuessEl.innerHTML = `Seu palpite: <span>${player.guess}</span> | Ganhou: <span>${player.wins || 0}</span>`;
+    if (playerGuess !== null && (gameState.phase === 'play' || gameState.phase === 'roundEnd')) {
+        playerGuessEl.innerHTML = `Seu palpite: <span>${playerGuess}</span> | Ganhou: <span>${player.wins || 0}</span>`;
         playerGuessEl.style.display = 'block';
     } else {
         playerGuessEl.style.display = 'none';
@@ -922,21 +2098,23 @@ function toggleSound() {
     soundEnabled = !soundEnabled;
     
     // Update button appearance
-    if (soundEnabled) {
-        soundToggleBtn.textContent = '🔊';
-        soundToggleBtn.classList.remove('muted');
-        soundToggleBtn.title = 'Desativar sons';
+    if (soundToggleBtn) {
+        if (soundEnabled) {
+            soundToggleBtn.textContent = '🔊';
+            soundToggleBtn.classList.remove('muted');
+            soundToggleBtn.title = 'Desativar sons';
+            
+            // Play a sound to confirm sounds are on
+            playSound('guess');
+        } else {
+            soundToggleBtn.textContent = '🔇';
+            soundToggleBtn.classList.add('muted');
+            soundToggleBtn.title = 'Ativar sons';
+        }
         
-        // Play a sound to confirm sounds are on
-        playSound('guess');
-    } else {
-        soundToggleBtn.textContent = '🔇';
-        soundToggleBtn.classList.add('muted');
-        soundToggleBtn.title = 'Ativar sons';
+        // Save preference to local storage
+        localStorage.setItem('fodinhaSound', soundEnabled ? 'on' : 'off');
     }
-    
-    // Save preference to local storage
-    localStorage.setItem('fodinhaSound', soundEnabled ? 'on' : 'off');
 }
 
 // Function to load sound preference
@@ -946,7 +2124,7 @@ function loadSoundPreference() {
         soundEnabled = savedPreference === 'on';
         
         // Update button appearance
-        if (!soundEnabled) {
+        if (soundToggleBtn && !soundEnabled) {
             soundToggleBtn.textContent = '🔇';
             soundToggleBtn.classList.add('muted');
             soundToggleBtn.title = 'Ativar sons';
@@ -963,7 +2141,7 @@ function setupTouchEvents() {
             if (!isNaN(index)) {
                 // If the card is already selected, play it immediately
                 if (selectedCardIndex === index && isCurrentPlayer()) {
-                    socket.emit('playCard', { cardIndex: selectedCardIndex });
+                    socket.emit('playCard', selectedCardIndex);
                     playSound('cardPlay');
                     selectedCardIndex = null;
                 } else {
@@ -1010,14 +2188,412 @@ function setupTouchEvents() {
 
 // Initialize the game
 window.onload = function() {
-    initializeSocket();
-    setupEventListeners();
-    preloadSounds();
-    loadSoundPreference();
+    console.log("Game initializing...");
     
-    // Show join room modal
-    joinRoomModal.style.display = 'flex';
+    // Verificar se existe uma sessão salva antes de inicializar
+    const savedSession = loadSessionState();
+    
+    if (savedSession) {
+        console.log("Sessão anterior encontrada, tentando reconectar...", savedSession);
+        
+        // Mostrar overlay de reconexão
+        const reconnectingOverlay = showReconnectingOverlay();
+        
+        // Inicializar o socket normalmente
+        initializeSocket();
+        setupEventListeners();
+        preloadSounds();
+        loadSoundPreference();
+        
+        // O resto da reconexão será tratado no evento de conexão do socket
+        
+        // Definir timeout para o caso de falha na reconexão
+        setTimeout(() => {
+            // Se ainda estiver mostrando a overlay e não houver roomId (não reconectou)
+            if (document.querySelector('.reconnecting-overlay') && !roomId) {
+                console.log("Falha ao reconectar automaticamente.");
+                hideReconnectingOverlay();
+                
+                // Mostrar o modal de entrada
+                joinRoomModal.style.display = 'flex';
+                waitingRoomModal.style.display = 'none';
+                
+                // Limpar a sessão para evitar tentativas futuras
+                clearSessionState();
+                
+                // Adicionar mensagem de falha
+                addSystemMessage("Não foi possível reconectar à sala anterior.");
+            }
+        }, 10000); // 10 segundos para tentar reconectar
+    } else {
+        // Inicialização normal sem sessão anterior
+        initializeSocket();
+        setupEventListeners();
+        preloadSounds();
+        loadSoundPreference();
+        
+        // Adicionar listeners de erro
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            addSystemMessage("Erro de conexão. Tentando reconectar...");
+        });
+        
+        socket.on('connect_timeout', () => {
+            console.error('Connection timeout');
+            addSystemMessage("Tempo de conexão esgotado. Tentando reconectar...");
+        });
+        
+        socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            addSystemMessage("Erro no servidor. Tente novamente mais tarde.");
+        });
+        
+        // Mostrar modal de entrada
+        joinRoomModal.style.display = 'flex';
+        waitingRoomModal.style.display = 'none';
+    }
     
     // Setup minimize buttons
     ensureMinimizeButtonsSetup();
-}; 
+    
+    console.log("Game initialization complete.");
+
+    // Adicione esta linha como a última instrução do window.onload
+    setupDebugTools();
+};
+
+// Função para diagnóstico de modais
+function diagnosticModals() {
+    // Estado atual do jogo
+    const gameStatus = {
+        gameState: gameState ? {
+            phase: gameState.phase,
+            currentRound: gameState.currentRound,
+            currentPlayerIndex: gameState.currentPlayerIndex,
+            currentPlayer: gameState.players && gameState.currentPlayerIndex >= 0 && gameState.currentPlayerIndex < gameState.players.length ? 
+                          gameState.players[gameState.currentPlayerIndex].name : 'Desconhecido',
+            isCurrentPlayerYou: isCurrentPlayer()
+        } : 'Não inicializado',
+        
+        // Estado dos modais
+        modals: {
+            guessModal: {
+                display: guessModal.style.display,
+                minimized: modalPreferences.guessModalMinimized
+            },
+            roundSummaryModal: {
+                display: roundSummaryModal.style.display,
+                minimized: modalPreferences.roundSummaryMinimized
+            },
+            gameOverModal: {
+                display: gameOverModal.style.display
+            }
+        },
+        
+        // Informações de sessão
+        session: loadSessionState(),
+        
+        // Informações do jogador
+        player: {
+            id: playerId,
+            name: playerName,
+            isReady: isPlayerReady,
+            handSize: playerHand ? playerHand.length : 0
+        }
+    };
+    
+    console.log('=== DIAGNÓSTICO DO JOGO ===');
+    console.log(JSON.stringify(gameStatus, null, 2));
+    console.log('==========================');
+    
+    return gameStatus;
+}
+
+// Adicione console.debug em pontos críticos para facilitar depuração
+// Por exemplo, no início de cada função modal:
+
+// Adicione isto no início da função showGuessModal
+// console.debug('Chamando showGuessModal', {phase: gameState?.phase, isCurrentPlayer: isCurrentPlayer()});
+
+// Adicione isto no início de showRoundSummary
+// console.debug('Chamando showRoundSummary', {phase: gameState?.phase});
+
+// Adicione isto no início de isCurrentPlayer
+// console.debug('Verificando isCurrentPlayer', {playerId, currentPlayerIndex: gameState?.currentPlayerIndex, currentPlayerId: gameState?.players?.[gameState?.currentPlayerIndex]?.id});
+
+// Exponha a função de diagnóstico na janela para acesso fácil
+window.runDiagnostic = diagnosticModals;
+
+// Botão de verificação manual (apenas para depuração)
+function addDebugButton() {
+    // Verificar se o botão já existe
+    if (document.getElementById('debug-check-modals')) {
+        return;
+    }
+    
+    // Criar botão de verificação manual
+    const debugButton = document.createElement('button');
+    debugButton.id = 'debug-check-modals';
+    debugButton.textContent = 'Verificar Modais';
+    debugButton.style.position = 'fixed';
+    debugButton.style.bottom = '10px';
+    debugButton.style.right = '10px';
+    debugButton.style.zIndex = '9999';
+    debugButton.style.backgroundColor = '#ff5522';
+    debugButton.style.color = 'white';
+    debugButton.style.border = 'none';
+    debugButton.style.borderRadius = '4px';
+    debugButton.style.padding = '8px 12px';
+    debugButton.style.cursor = 'pointer';
+    debugButton.style.opacity = '0.7';
+    
+    // Adicionar evento de clique
+    debugButton.addEventListener('click', () => {
+        console.log('Verificação manual de modais iniciada');
+        
+        // Forçar requisição de estado do jogo
+        socket.emit('requestGameState');
+        
+        // Verificar modais após um pequeno delay
+        setTimeout(() => {
+            checkAndShowModals();
+            
+            // Forçar abertura do modal de palpites se for a fase correta
+            if (gameState && gameState.phase === 'guess' && isCurrentPlayer()) {
+                console.log('Forçando abertura do modal de palpites via botão de debug');
+                showGuessModal();
+            } else {
+                console.log('Não é necessário mostrar o modal de palpites agora:', {
+                    phase: gameState?.phase,
+                    isCurrentPlayer: isCurrentPlayer()
+                });
+            }
+            
+            // Mostrar diagnóstico
+            diagnosticModals();
+        }, 500);
+    });
+    
+    // Adicionar ao corpo do documento
+    document.body.appendChild(debugButton);
+    
+    // Adicionar um botão para forçar especificamente o modal de palpites
+    const forceGuessButton = document.createElement('button');
+    forceGuessButton.id = 'force-guess-modal';
+    forceGuessButton.textContent = 'Forçar Modal Palpite';
+    forceGuessButton.style.position = 'fixed';
+    forceGuessButton.style.bottom = '10px';
+    forceGuessButton.style.right = '150px';
+    forceGuessButton.style.zIndex = '9999';
+    forceGuessButton.style.backgroundColor = '#ff9900';
+    forceGuessButton.style.color = 'white';
+    forceGuessButton.style.border = 'none';
+    forceGuessButton.style.borderRadius = '4px';
+    forceGuessButton.style.padding = '8px 12px';
+    forceGuessButton.style.cursor = 'pointer';
+    forceGuessButton.style.opacity = '0.7';
+    
+    // Adicionar evento de clique
+    forceGuessButton.addEventListener('click', () => {
+        console.log('Forçando exibição do modal de palpites');
+        showGuessModal();
+    });
+    
+    // Adicionar ao corpo do documento
+    document.body.appendChild(forceGuessButton);
+}
+
+// Adicione esta chamada no final da inicialização do jogo
+// window.onload ou após a reconexão
+function setupDebugTools() {
+    // Verificar se estamos em modo de desenvolvimento
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('Modo de desenvolvimento detectado, adicionando ferramentas de debug');
+        addDebugButton();
+    } else {
+        console.log('Modo de produção, ferramentas de debug não adicionadas');
+    }
+}
+
+function requestSyncAfterReconnect() {
+    setTimeout(() => {
+        // Verificação progressiva
+        console.log('Iniciando sequência de sincronização após reconexão');
+        
+        // Primeira solicitação após 1s
+        setTimeout(() => {
+            if (roomId) {
+                console.log('Solicitação #1: requestGameState');
+                socket.emit('requestGameState');
+            }
+        }, 1000);
+        
+        // Segunda solicitação após 2s
+        setTimeout(() => {
+            if (roomId) {
+                console.log('Solicitação #2: requestFullSync');
+                socket.emit('requestFullSync');
+            }
+        }, 2000);
+        
+        // Terceira solicitação após 4s se as anteriores não funcionaram
+        setTimeout(() => {
+            if (roomId && (!gameState || Object.keys(gameState).length === 0)) {
+                console.log('Solicitação #3: requestFullSync (retry)');
+                socket.emit('requestFullSync');
+                
+                // Inicia monitoramento para verificar sucesso
+                monitorReconnectionSuccess();
+            }
+        }, 4000);
+    }, 500);
+}
+
+// Função para tentar reconexão com retry
+function attemptReconnect(savedSession, maxRetries = 3) {
+    let reconnectAttempt = 0;
+    const reconnectInterval = 2000; // 2 seconds between attempts
+    
+    // Show reconnecting overlay
+    const reconnectingOverlay = showReconnectingOverlay();
+    
+    // Function that makes the reconnection attempt
+    function tryReconnect() {
+        reconnectAttempt++;
+        console.log(`Reconnection attempt ${reconnectAttempt}/${maxRetries}`);
+        
+        // Update message in overlay
+        const statusElement = reconnectingOverlay.querySelector('p');
+        if (statusElement) {
+            statusElement.textContent = `Attempting to reconnect to your game (${reconnectAttempt}/${maxRetries})...`;
+        }
+        
+        // Send reconnection request
+        socket.emit('joinRoom', { 
+            playerName: savedSession.playerName, 
+            roomId: savedSession.roomId,
+            previousSocketId: savedSession.socketId,
+            persistentId: savedSession.persistentId || getPersistentPlayerId(),
+            isReconnecting: true
+        });
+        
+        // Set timeout for this attempt
+        const timeoutId = setTimeout(() => {
+            // If we haven't received confirmation and have more attempts, try again
+            if (!roomId && reconnectAttempt < maxRetries) {
+                tryReconnect();
+            } else if (!roomId) {
+                // If we reached the maximum attempts, give up
+                console.error('Maximum reconnection attempts reached without success');
+                hideReconnectingOverlay();
+                clearSessionState();
+                
+                // Show message to the user
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'reconnection-error';
+                errorMsg.innerHTML = `
+                    <div class="error-box">
+                        <h3>Reconnection Failed</h3>
+                        <p>Could not reconnect to your previous game.</p>
+                        <button id="return-home-btn">Return to Home Screen</button>
+                    </div>
+                `;
+                document.body.appendChild(errorMsg);
+                
+                // Add event to button
+                document.getElementById('return-home-btn').addEventListener('click', () => {
+                    window.location.reload();
+                });
+            }
+        }, reconnectInterval);
+        
+        // If we receive confirmation, clear the timeout
+        const clearTimeoutFn = () => {
+            clearTimeout(timeoutId);
+            socket.off('playerJoined', clearTimeoutFn);
+        };
+        
+        // Listen for confirmation event
+        socket.once('playerJoined', clearTimeoutFn);
+    }
+    
+    // Start first attempt
+    tryReconnect();
+}
+
+// Monitoramento de sucesso na reconexão
+function monitorReconnectionSuccess(timeout = 10000) {
+    let reconnected = false;
+    const startTime = Date.now();
+    
+    // Function to check if reconnection was successful
+    function checkReconnection() {
+        if (roomId && gameState) {
+            console.log('Reconnection successful:', {
+                room: roomId, 
+                playerId: playerId,
+                gamePhase: gameState.phase
+            });
+            reconnected = true;
+            hideReconnectingOverlay();
+            
+            // Check and show modals after delay to ensure everything is loaded
+            setTimeout(() => {
+                checkAndShowModals();
+                scheduleModalChecks();
+                
+                // Send final sync request to ensure
+                socket.emit('requestFullSync');
+                
+                // Add success message
+                addSystemMessage("Reconnection successful! Welcome back.");
+            }, 1000);
+            
+            return true;
+        }
+        
+        // Check if we reached timeout
+        if (Date.now() - startTime > timeout) {
+            console.warn('Timeout in reconnection monitoring.');
+            return false;
+        }
+        
+        // Continue checking
+        setTimeout(checkReconnection, 500);
+        return false;
+    }
+    
+    // Start checking
+    checkReconnection();
+}
+
+// Add this in the socket.on('connect') handler in the initializeSocket function
+socket.on('connect', () => {
+    playerId = socket.id;
+    console.log('Connected to server with ID:', playerId);
+    
+    // Add a ping/pong mechanism to keep connection alive
+    setInterval(() => {
+        if (roomId) { // Only ping if we're in a room
+            socket.emit('ping');
+        }
+    }, 30000);
+    
+    // Check if there's a saved session
+    const savedSession = loadSessionState();
+    if (savedSession && !roomId) {
+        console.log('Attempting to reconnect using saved session:', savedSession);
+        
+        // Restore session data
+        playerName = savedSession.playerName;
+        
+        // Use the improved reconnection attempt function
+        attemptReconnect(savedSession);
+        
+        // Monitor reconnection success
+        monitorReconnectionSuccess();
+        
+        // Add system message
+        addSystemMessage(`Attempting to reconnect as ${savedSession.playerName}...`);
+    }
+});
