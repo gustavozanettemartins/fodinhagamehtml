@@ -1264,3 +1264,13 @@ input {
     text-align: center;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
 }
+
+#guess-modal {
+    justify-content: flex-end !important; /* Alinha à direita */
+    align-items: flex-start !important;   /* Opcional: topo, pode ser center se preferir */
+    padding-right: 60px;                  /* Espaço da borda direita */
+    padding-top: 60px;                    /* Espaço do topo */
+}
+#guess-modal .modal-content {
+    margin-right: 0; /* Garante que não há margem extra */
+}
