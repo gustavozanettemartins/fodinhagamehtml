@@ -422,11 +422,7 @@ class Game {
     
     calculateDealerAllowedGuesses() {
         if (this.currentRound === 1) {
-            if (this.sumGuesses > 0) {
-                return [1];
-            } else {
-                return [0, 1];
-            }
+            return [1];                        
         } else {
             if (this.sumGuesses === this.currentRound) {
                 return Array.from({length: this.currentRound}, (_, i) => i + 1);
@@ -814,18 +810,25 @@ io.on('connection', (socket) => {
             // Se houve um novo semi round (ou seja, todos jogaram), envie mensagem
             if (game.semiRounds > prevSemiRounds) {
                 // Descubra quem ganhou a semi rodada
-                const lastCard = game.cardHistory[game.cardHistory.length - 1];
                 const winner = game.players.find(p => p.id === game.players[game.currentPlayerIndex].id);
+                const winnerCard = winner.playedCard || (game.cardHistory.find(c => c.playerId === winner.id && c.round === game.currentRound && c.semiRound === game.semiRounds) || {}).card;
+                
+                // Se winnerCard não estiver disponível, tente buscar no histórico da rodada
+                if (!winnerCard) {
+                    // Busca a última carta jogada pelo vencedor nesta rodada
+                    const lastWinnerCard = [...game.cardHistory].reverse().find(c => c.playerId === winner.id && c.round === game.currentRound);
+                    winnerCard = lastWinnerCard ? lastWinnerCard.card : null;
+                }
 
-                if (lastCard && winner) {
+                // Monta a mensagem
+                if (winner && winnerCard) {
                     const suitMap = {
                         clubs: 'paus',
                         diamonds: 'ouros',
                         hearts: 'copas',
                         spades: 'espadas'
                     };
-                    const carta = lastCard.card;
-                    const cartaStr = `${carta.value} de ${suitMap[carta.suit] || carta.suit}`;
+                    const cartaStr = `${winnerCard.value} de ${suitMap[winnerCard.suit] || winnerCard.suit}`;
                     io.to(roomId).emit('chatMessage', {
                         sender: 'Sistema',
                         message: `Jogador: ${winner.name} levou a rodada com a carta ${cartaStr}.`,
