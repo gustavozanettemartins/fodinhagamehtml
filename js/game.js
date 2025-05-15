@@ -228,6 +228,7 @@ function loadSessionState() {
 // Função para limpar a sessão quando o jogador sair voluntariamente
 function clearSessionState() {
     localStorage.removeItem('fodinhaSession');
+    localStorage.removeItem('fodinhaPersistentId');
     console.log('Sessão removida');
 }
 
@@ -276,15 +277,19 @@ function hideReconnectingOverlay() {
 function leaveGame() {
     if (confirm("Tem certeza que deseja sair do jogo?")) {
         // Notificar o servidor
-        if (socket && socket.connected && roomId) {
-            socket.emit('leaveRoom', { roomId: roomId });
+
+        const savedSession = loadSessionState();
+        if (savedSession && roomId) {
+            if (socket && socket.connected && roomId) {
+                socket.emit('leaveRoom', {persistentId: savedSession.persistentId, roomId: roomId });
+            }
+            
+            // Limpar dados de sessão
+            clearSessionState();
+            
+            // Redirecionamento para a página inicial
+            window.location.href = window.location.pathname;
         }
-        
-        // Limpar dados de sessão
-        clearSessionState();
-        
-        // Redirecionamento para a página inicial
-        window.location.href = window.location.pathname;
     }
 }
 
@@ -443,9 +448,6 @@ function forceModalAfterReconnect() {
         setTimeout(tryOpen, 2000);
     }
 }
-
-// Adicione esta função para forçar a verificação de modais periodicamente após reconexão
-// Coloque-a após a função checkAndShowModals() existente
 
 let modalCheckInterval = null;
 
@@ -656,12 +658,12 @@ function initializeSocket() {
     });
     
     socket.on('playerLeft', (data) => {
-        console.log('Player left:', data);
+        console.log(data);
         updatePlayersList(data.players);
         playersCountDisplay.textContent = data.players.length;
         
         // Add system message to chat using the name from the event data
-        addSystemMessage(`${data.playerName} saiu da sala.`);
+        addSystemMessage(`${data.message}`);
     });
     
     socket.on('gameState', (data) => {
@@ -1031,11 +1033,22 @@ function initializeSocket() {
             gameState.previousLastPlayedCard = data.lastPlayedCard;
         }
     });
+
+    socket.on('gameCancelled', (data) => {
+        console.log('Game cancelled:', data);
+        // Show waiting room again
+        alert(data.message || "Partida cancelada.");
+        clearSessionState();
+        hideAllModals();        
+        waitingRoomModal.style.display = 'flex';
+        
+    })
 }
 
 // Event Listeners
 function setupEventListeners() {
-    // Join room button
+    // 1. LOBBY FUNCTIONS    
+    // 1.1 Join room button
     joinRoomBtn.addEventListener('click', () => {
         playerName = playerNameInput.value.trim();
         const roomIdValue = roomIdInput.value.trim();
@@ -1078,7 +1091,7 @@ function setupEventListeners() {
         }
     });
     
-    // Copy room code button
+    // 1.2 Copy room code button
     copyRoomCodeBtn.addEventListener('click', () => {
         const roomCode = roomCodeDisplay.textContent;
         navigator.clipboard.writeText(roomCode).then(() => {
@@ -1091,44 +1104,27 @@ function setupEventListeners() {
         });
     });
     
-    // Player ready button
+    // 1.3 Player ready button
     playerReadyBtn.addEventListener('click', () => {
-        console.log("Player ready button clicked, current state:", isPlayerReady);
-        
-        // Toggle ready state
         isPlayerReady = !isPlayerReady;
-        
-        // Update button text
+
         playerReadyBtn.textContent = isPlayerReady ? 'Aguardando' : 'Pronto';
-        
-        // Add visual feedback
+
         playerReadyBtn.disabled = true;
-        playerReadyBtn.style.opacity = "0.7";
-        
-        // Log the event we're about to send
-        console.log("Sending playerReady event with value:", isPlayerReady);
-        
-        // Send the ready status to the server - try both formats to ensure compatibility
-        try {
-            // New format (object)
-            socket.emit('playerReady', { ready: isPlayerReady });
-        } catch (e) {
-            console.error("Error with object format:", e);
-            // Old format (boolean)
-            socket.emit('playerReady', isPlayerReady);
-        }
-        
-        // Re-enable the button after a short delay
+        playerReadyBtn.style.opacity = '0.7';
         setTimeout(() => {
-            playerReadyBtn.disabled = false;
-            playerReadyBtn.style.opacity = "1";
+        playerReadyBtn.disabled = false;
+        playerReadyBtn.style.opacity = '1';
         }, 1000);
-        
-        // Add system message
-        addSystemMessage(`Você está ${isPlayerReady ? 'pronto' : 'aguardando'}.`);
+
+        console.log('Enviando playerReady:', isPlayerReady);
+        socket.emit('playerReady', isPlayerReady);
+
+        addSystemMessage(`Você está ${isPlayerReady ? 'aguardando' : 'pronto'}.`);
     });
     
-    // Guess confirm button
+    // 2. GAME FUNCTIONS
+    // 2.1 Guess confirm button
     confirmGuessBtn.addEventListener('click', () => {
         const guessValue = parseInt(guessValueInput.value);
         
@@ -1160,7 +1156,7 @@ function setupEventListeners() {
         }
     });
     
-    // Continue button
+    // 2.2 Continue button
     continueBtn.addEventListener('click', () => {
         roundSummaryModal.style.display = 'none';
         
@@ -1193,17 +1189,8 @@ function setupEventListeners() {
             }
         }, 5000);
     });
-    
-    // New game button
-    newGameBtn.addEventListener('click', () => {
-        gameOverModal.style.display = 'none';
-        waitingRoomModal.style.display = 'flex';
-        isPlayerReady = false;
-        playerReadyBtn.textContent = 'Pronto';
-        socket.emit('restartGame');
-    });
-    
-    // Play card button
+
+    // 2.3 Play card button
     playCardBtn.addEventListener('click', () => {
         if (selectedCardIndex !== null && isCurrentPlayer()) {
             socket.emit('playCard', selectedCardIndex);
@@ -1213,6 +1200,15 @@ function setupEventListeners() {
         }
     });
     
+    // New game button
+    newGameBtn.addEventListener('click', () => {
+        gameOverModal.style.display = 'none';
+        waitingRoomModal.style.display = 'flex';
+        isPlayerReady = false;
+        playerReadyBtn.textContent = 'Pronto';
+        socket.emit('restartGame');
+    });
+            
     // Sound toggle button
     if (soundToggleBtn) {
         soundToggleBtn.addEventListener('click', toggleSound);
@@ -1458,11 +1454,11 @@ function updatePlayersUI() {
         `;
         
         // Add played card if any
-        playerHTML += `<div class="played-card">
+        /*playerHTML += `<div class="played-card">
             ${player.playedCard ? 
                 `<img src="${getCardImagePath(player.playedCard)}" class="card-img" alt="Carta jogada">` : 
                 ''}
-        </div>`;
+        </div>`;*/
         
         // Add player's hand in first round or when visible
         if (player.hand && (gameState.firstRound || gameState.phase === 'waiting')) {
@@ -1555,9 +1551,33 @@ function updateTableCards() {
     const playersWithCards = gameState.players.filter(p => p.score > 0 && p.playedCard);
     
     if (playersWithCards.length === 0) return;
+
+    // Ordenar as cartas por valor (maior para menor)
+    const sortedPlayers = [...playersWithCards].sort((a, b) => {
+        const cardA = a.playedCard;
+        const cardB = b.playedCard;
+        
+        // Se uma das cartas for o trump, ela tem prioridade
+        const trumpValue = gameState.trumpCard ? gameState.trumpCard.value + 1 : null;
+        if (trumpValue) {
+            if (cardA.value === trumpValue && cardB.value !== trumpValue) return -1;
+            if (cardB.value === trumpValue && cardA.value !== trumpValue) return 1;
+            if (cardA.value === trumpValue && cardB.value === trumpValue) {
+                return SUITS[cardA.suit] - SUITS[cardB.suit];
+            }
+        }
+        
+        // Comparar valores das cartas
+        if (VALUES[cardA.value] !== VALUES[cardB.value]) {
+            return VALUES[cardB.value] - VALUES[cardA.value];
+        }
+        
+        // Se os valores forem iguais, comparar naipes
+        return SUITS[cardB.suit] - SUITS[cardA.suit];
+    });
     
     // Adicionar cada carta à mesa
-    for (const player of playersWithCards) {
+    sortedPlayers.forEach((player, index) => {
         const cardContainer = document.createElement('div');
         cardContainer.className = 'table-card-container';
         
@@ -1578,13 +1598,11 @@ function updateTableCards() {
         cardContainer.appendChild(cardEl);
         cardContainer.appendChild(playerNameEl);
         tableCardsEl.appendChild(cardContainer);
-    }
-    
-    // Animar as cartas
-    const cards = tableCardsEl.querySelectorAll('.table-card');
-    cards.forEach((card, index) => {
-        const angle = (index - (cards.length - 1) / 2) * 10;
-        card.style.transform = `rotate(${angle}deg)`;
+        
+        // Posicionar a carta com um pequeno deslocamento
+        const offset = index * 30; // 30 pixels de deslocamento entre cada carta
+        cardContainer.style.left = `calc(50% - ${offset}px)`;
+        cardContainer.style.zIndex = sortedPlayers.length - index; // Maior carta fica por cima
     });
 }
 
@@ -2309,18 +2327,6 @@ function diagnosticModals() {
     return gameStatus;
 }
 
-// Adicione console.debug em pontos críticos para facilitar depuração
-// Por exemplo, no início de cada função modal:
-
-// Adicione isto no início da função showGuessModal
-// console.debug('Chamando showGuessModal', {phase: gameState?.phase, isCurrentPlayer: isCurrentPlayer()});
-
-// Adicione isto no início de showRoundSummary
-// console.debug('Chamando showRoundSummary', {phase: gameState?.phase});
-
-// Adicione isto no início de isCurrentPlayer
-// console.debug('Verificando isCurrentPlayer', {playerId, currentPlayerIndex: gameState?.currentPlayerIndex, currentPlayerId: gameState?.players?.[gameState?.currentPlayerIndex]?.id});
-
 // Exponha a função de diagnóstico na janela para acesso fácil
 window.runDiagnostic = diagnosticModals;
 
@@ -2566,34 +2572,3 @@ function monitorReconnectionSuccess(timeout = 10000) {
     // Start checking
     checkReconnection();
 }
-
-// Add this in the socket.on('connect') handler in the initializeSocket function
-socket.on('connect', () => {
-    playerId = socket.id;
-    console.log('Connected to server with ID:', playerId);
-    
-    // Add a ping/pong mechanism to keep connection alive
-    setInterval(() => {
-        if (roomId) { // Only ping if we're in a room
-            socket.emit('ping');
-        }
-    }, 30000);
-    
-    // Check if there's a saved session
-    const savedSession = loadSessionState();
-    if (savedSession && !roomId) {
-        console.log('Attempting to reconnect using saved session:', savedSession);
-        
-        // Restore session data
-        playerName = savedSession.playerName;
-        
-        // Use the improved reconnection attempt function
-        attemptReconnect(savedSession);
-        
-        // Monitor reconnection success
-        monitorReconnectionSuccess();
-        
-        // Add system message
-        addSystemMessage(`Attempting to reconnect as ${savedSession.playerName}...`);
-    }
-});
