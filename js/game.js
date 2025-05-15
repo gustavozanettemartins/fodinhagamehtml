@@ -1143,6 +1143,11 @@ function setupEventListeners() {
                 // Exceção para primeira rodada sem palpites
                 const isFirstRoundWithNoGuesses = (gameState.currentRound === 1 && currentSum === 0);
                 
+                // Bloqueio para primeira rodada: dealer só pode apostar 1
+                if (gameState.currentRound === 1 && guessValue !== 1) {
+                    alert("Como distribuidor, na primeira rodada você só pode apostar 1!");
+                    return;
+                }
                 if (guessValue + currentSum === totalCards && !isFirstRoundWithNoGuesses) {
                     alert("Como distribuidor, você não pode dar um palpite que faça o total igual ao número de cartas!");
                     return;
@@ -1637,9 +1642,11 @@ function showGuessModal() {
     // Show dealer restrictions if applicable
     if (gameState && isDealerPlayer(playerId)) {
         const dealerAllowedGuesses = calculateDealerAllowedGuesses();
+        guessValueInput.min = Math.min(...dealerAllowedGuesses);
         dealerRestrictionsEl.innerHTML = `${guessMessage}Como você é o dealer, só pode apostar: ${dealerAllowedGuesses.join(', ')}`;
         dealerRestrictionsEl.style.display = 'block';
     } else {
+        guessValueInput.min = 0;
         if (gameState && gameState.firstRound) {
             dealerRestrictionsEl.innerHTML = guessMessage;
             dealerRestrictionsEl.style.display = 'block';
@@ -1915,13 +1922,7 @@ function calculateDealerAllowedGuesses() {
     console.log(`Calculando palpites permitidos: Rodada ${currentRound}, Soma atual ${sumGuesses}`);
     
     if (currentRound === 1) {
-        if (sumGuesses > 0) {
-            console.log(`Rodada 1 com palpites: permitido [1]`);
-            return [1];
-        } else {
-            console.log(`Rodada 1 sem palpites: permitido [0, 1]`);
-            return [0, 1];
-        }
+        return [1];
     } else {
         // Gerar array com todos os possíveis palpites (0 até currentRound)
         const possibleGuesses = Array.from({length: currentRound + 1}, (_, i) => i);
