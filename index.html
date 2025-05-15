@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1a5420">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Jogo de Cartas Fodinha - Multiplayer</title>
+    <title>Fodinha Online</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="img/icon-192x192.png">
@@ -16,17 +16,17 @@
     <!-- Modal para entrar em uma sala -->
     <div class="modal" id="join-room-modal">
         <div class="modal-content">
-            <h2 class="modal-title">Fodinha - Jogo Multiplayer</h2>
+            <h2 class="modal-title">Fodinha</h2>
             <div>
-                <label for="player-name">Seu nome:</label>
+                <!-- <label for="player-name">Seu nome:</label> -->
                 <input type="text" id="player-name" placeholder="Seu nome">
             </div>
-            <div>
-                <label for="room-id">Código da sala (opcional):</label>
+            <div>                
                 <input type="text" id="room-id" placeholder="Deixe em branco para criar uma nova sala">
+                <!-- <label for="room-id">Código da sala (opcional):</label> -->
             </div>
             <div class="modal-buttons">
-                <button id="join-room-btn">Entrar / Criar Sala</button>
+                <button id="join-room-btn">Conectar</button>
             </div>
         </div>
     </div>
@@ -111,12 +111,15 @@
     </div>
     
     <header>
-        <h1>Fodinha - Jogo de Cartas Multiplayer</h1>
+        <h1>Fodinha</h1>
         <div id="room-info-bar" class="room-info-bar">
             <span>Sala: <span id="current-room-code"></span></span>
             <span class="players-online">Jogadores: <span id="players-count">0</span></span>
             <span class="sound-toggle">
                 <button id="sound-toggle-btn" title="Ativar/Desativar sons">🔊</button>
+            </span>
+            <span class="leave-game">
+                <button id="leave-game-btn" title="Sair do jogo">Sair</button>
             </span>
         </div>
     </header>
@@ -147,7 +150,10 @@
                     
                     <div class="table-center">
                         <img id="trump-card" class="trump-card" src="" alt="Carta do Trunfo">
-                        <div class="round-info">Rodada: <span id="table-round">1</span></div>
+                        <div class="table-played-cards" id="table-played-cards">
+                            <!-- Cartas jogadas na rodada atual serão mostradas aqui -->
+                        </div>
+                        <div class="round-info">Rodada: <span id="table-round">1</span></div>                        
                     </div>
                     
                     <div class="player-hand" id="player-hand">
