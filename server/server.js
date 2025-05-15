@@ -17,6 +17,8 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // Game rooms storage
 const gameRooms = {};
+const disconnectTimeouts = {};
+const playerQuitByRoom = {};
 
 // Game class for server-side logic
 class Game {
@@ -508,44 +510,80 @@ class Game {
     }
 }
 
+
+function addSessionToRoom(roomId, persistentId) {
+    // Se esse roomId ainda não tiver lista, cria uma vazia
+    if (!playerQuitByRoom[roomId]) {
+      playerQuitByRoom[roomId] = [];
+    }
+    // Adiciona o novo persistentId
+    playerQuitByRoom[roomId].push(persistentId);
+}
+  
+function removeSessionFromRoom(roomId, persistentId) {
+    const list = playerQuitByRoom[roomId];
+    if (!list) return;               // sala não existe → nada a fazer
+    // Filtra o id que saiu
+    playerQuitByRoom[roomId] = list.filter(id => id !== persistentId);
+    // Se ficou vazio, delete o próprio roomId
+    if (playerQuitByRoom[roomId].length === 0) {
+      delete playerQuitByRoom[roomId];
+    }
+}
+  
+function hasSessionInRoom(roomId, persistentId) {
+    const list = playerQuitByRoom[roomId];
+    return Array.isArray(list) && list.includes(persistentId);
+}
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
     console.log(`New connection: ${socket.id}`);
     
     // Create or join a game room
-    // Adicione este código ao server.js para manipular a reconexão de jogadores
-    // Nova versão do manipulador joinRoom que suporta reconexão
     socket.on('joinRoom', ({ playerName, roomId, persistentId, previousSocketId, isReconnecting }) => {
-        // Generate a room ID if not provided
-        if (!roomId) {
-            roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        const requestedRoom = Boolean(roomId);
+        if (requestedRoom && !gameRooms[roomId] && !isReconnecting) {
+          socket.emit('roomInvalid', {
+            message: 'Esta sala não existe mais ou foi cancelada. Você será redirecionado para a lobby.'
+          });
+          return;
         }
-    
+                
         // Store session info in the socket for future use
         socket.persistentId = persistentId;
         socket.previousSocketId = previousSocketId;
         socket.playerName = playerName;
-    
+
+        if (hasSessionInRoom(roomId, persistentId)) {
+            socket.emit('roomInvalid', {
+                message: 'Esta sala não existe mais ou foi cancelada. Você será redirecionado para a lobby.'
+            });
+            return;
+        }
+
         console.log(`Room join request: ${playerName} (socket: ${socket.id}, room: ${roomId})`);
         console.log(`- persistentId: ${persistentId || 'N/A'}, previousSocketId: ${previousSocketId || 'N/A'}, isReconnecting: ${!!isReconnecting}`);
-    
-        // Create the game if it doesn't exist yet
-        /*if (!gameRooms[roomId]) {
-            gameRooms[roomId] = new Game(roomId);
-            console.log(`New room created: ${roomId}`);
+        
+        // Generate a room ID if not provided
+        if (!roomId) {
+            roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         }
-        const game = gameRooms[roomId];*/
-
+        
         if (!gameRooms[roomId] && !isReconnecting) {
             gameRooms[roomId] = new Game(roomId);
             console.log(`New room created: ${roomId}`);
         } else if (!gameRooms[roomId] && isReconnecting) {
             console.log(`Room ${roomId} exists but has no players`);
             return;
-            // gameRooms[roomId].reset(); // Example action
         } else {
             console.log(`Room ${roomId} exists and has players`);
+            if (gameRooms[roomId].players.length === 1 && gameRooms[roomId].phase !== 'waiting') {
+                return;
+            }      
         }
+
         const game = gameRooms[roomId];
     
         // ---- RECONNECTION HANDLING ----
@@ -559,7 +597,15 @@ io.on('connection', (socket) => {
             if (originalPlayer) {
                 const oldSocketId = originalPlayer.id;
                 console.log(`Reconnection found: Updating socket id from ${oldSocketId} to ${socket.id} for player ${originalPlayer.name}`);
-    
+                
+                if (disconnectTimeouts[oldSocketId]) {
+                    clearTimeout(disconnectTimeouts[oldSocketId].timeout);
+                    clearInterval(disconnectTimeouts[oldSocketId].interval);
+                    delete disconnectTimeouts[oldSocketId];
+                    console.log(`Reconexão de ${originalPlayer.name}: timeout/interval de remoção cancelado.`);
+                }
+                
+
                 // Update id everywhere
                 function patchAllIds(game, oldId, newId) {
                     // Player objects
@@ -690,7 +736,6 @@ io.on('connection', (socket) => {
         socket.emit('gameState', game.getFullGameStateForPlayer(socket.id));
     });
     
-    
     // Handle chat messages
     socket.on('chatMessage', ({ message, roomId }) => {
         if (!roomId || !gameRooms[roomId]) return;
@@ -757,11 +802,37 @@ io.on('connection', (socket) => {
         if (!roomId || !gameRooms[roomId]) return;
         
         const game = gameRooms[roomId];
+
+        // Antes de jogar, guarde o número de semiRounds
+        const prevSemiRounds = game.semiRounds;
         if (game.playCard(socket.id, cardIndex)) {
             // Notify all players about the updated game state
             game.players.forEach(player => {
                 io.to(player.id).emit('gameState', game.getFullGameStateForPlayer(player.id));
             });
+
+            // Se houve um novo semi round (ou seja, todos jogaram), envie mensagem
+            if (game.semiRounds > prevSemiRounds) {
+                // Descubra quem ganhou a semi rodada
+                const lastCard = game.cardHistory[game.cardHistory.length - 1];
+                const winner = game.players.find(p => p.id === game.players[game.currentPlayerIndex].id);
+
+                if (lastCard && winner) {
+                    const suitMap = {
+                        clubs: 'paus',
+                        diamonds: 'ouros',
+                        hearts: 'copas',
+                        spades: 'espadas'
+                    };
+                    const carta = lastCard.card;
+                    const cartaStr = `${carta.value} de ${suitMap[carta.suit] || carta.suit}`;
+                    io.to(roomId).emit('chatMessage', {
+                        sender: 'Sistema',
+                        message: `Jogador: ${winner.name} levou a rodada com a carta ${cartaStr}.`,
+                        timestamp: Date.now()
+                    });
+                }
+            }
         }
     });
     
@@ -810,34 +881,84 @@ io.on('connection', (socket) => {
     });
     
     // Disconnect handling
-    /*socket.on('disconnect', () => {
-        console.log(`Player disconnected: ${socket.id}`);
+    socket.on('disconnect', () => {
+        let secondsRemaining = 60;
+
+        if (hasSessionInRoom(socket.roomId, socket.persistentId)) {
+            secondsRemaining = 5;
+        }
+
+        console.log('PersistentId, RoomId: ', socket.persistentId, socket.roomId);
+        
         const roomId = socket.roomId;
         if (!roomId || !gameRooms[roomId]) return;
-        
+    
         const game = gameRooms[roomId];
         const player = game.players.find(p => p.id === socket.id);
-        const playerName = player ? player.name : "Um jogador";
-        
-        game.removePlayer(socket.id);
-        
-        // Notify other players
-        io.to(roomId).emit('playerLeft', {
-            playerId: socket.id,
-            playerName: playerName,
-            players: game.players.map(p => ({
-                id: p.id,
-                name: p.name,
-                isReady: p.isReady
-            }))
-        });
-        
-        // If room is empty, delete it
-        if (game.players.length === 0) {
-            delete gameRooms[roomId];
-        }
-    });*/
+        if (!player) return;
+    
+        console.log(`Player disconnected: ${socket.id} (${player.name}) - aguardando reconexão`);
 
+        // Interval que loga a contagem regressiva
+        const interval = setInterval(() => {
+            secondsRemaining--;
+            if (secondsRemaining > 0) {
+                console.log(`[DEBUG] Jogador ${player.name} tem ${secondsRemaining} segundos para reconectar.`);
+            }
+        }, 1000);
+    
+        // Timeout para remoção após 60s
+        const timeout = setTimeout(() => {
+            clearInterval(interval);
+    
+            // Se ele já reconectou, seu id teria mudado (tratado no joinRoom), então não faz nada
+            if (!game.players.some(p => p.id === socket.id)) {
+                // jogador não está mais na lista: provavelmente já reconectou e trocou de socket.id
+                delete disconnectTimeouts[socket.id];
+                return;
+            }
+    
+            // --- Remoção definitiva do jogador ---
+            game.removePlayer(socket.id);
+            console.log(`[DEBUG] Jogador ${player.name} removido da sala após 60 segundos sem reconectar.`);
+    
+            // Se sobrar pelo menos 2 jogadores, apenas notifica a saída
+            if (game.players.length >= 2) {
+                io.to(roomId).emit('playerLeft', {
+                    playerId: socket.id,
+                    playerName: player.name,
+                    players: game.players.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        isReady: p.isReady
+                    })),
+                    roomId
+                });
+                io.to(roomId).emit('chatMessage', {
+                    senderId: socket.id,
+                    sender: player.name,
+                    message: 'Saiu da partida',
+                    timestamp: Date.now()
+                });
+            } else {
+                // Menos de 2 jogadores: cancela a partida
+                game.phase = 'cancelled';
+                io.to(roomId).emit('gameCancelled', {
+                    message: 'Partida cancelada: jogadores insuficientes.'
+                });
+                console.log(`[DEBUG] Partida ${roomId} cancelada por falta de jogadores.`);
+    
+                // Remove a sala por completo
+                delete gameRooms[roomId];
+            }
+    
+            delete disconnectTimeouts[socket.id];
+        }, 60000);
+    
+        // Guarda para possível cleanup em reconexão
+        disconnectTimeouts[socket.id] = { timeout, interval };
+    });
+    
     // Add this new event handler for full sync requests
     socket.on('requestFullSync', () => {
         const roomId = socket.roomId;
@@ -968,29 +1089,47 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('leaveRoom', ({ roomId }) => {
-        if (!roomId || !gameRooms[roomId]) return;
+    socket.on('leaveRoom', ({ persistentId, roomId }) => {
+        console.log('leaveRoom', { persistentId, roomId });
+        
+        if (!roomId || !gameRooms[roomId]) return;        
+        
+        addSessionToRoom(roomId, persistentId);
+        
+        console.log(playerQuitByRoom);
+        
         const game = gameRooms[roomId];
-        // Remove the player
+        
         game.removePlayer(socket.id);
-        // Notify the room
-        io.to(roomId).emit('playerLeft', {
-            playerName: socket.playerName,
-            players: game.players.map(p => ({
-                id: p.id,
-                name: p.name,
-                isReady: p.isReady
-            })),
-            roomId
-        });
-        // Leave the room
-        socket.leave(roomId);
-        // Optionally: If room is empty, delete it
-        if (game.players.length === 0) {
+        
+        if (game.players.length >= 2) {
+            io.to(roomId).emit('playerLeft', {
+                playerId: socket.id,
+                playerName: player.name,
+                players: game.players.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    isReady: p.isReady
+                })),
+                roomId
+            });
+            io.to(roomId).emit('chatMessage', {
+                senderId: socket.id,
+                sender: player.name,
+                message: 'Saiu da partida',
+                timestamp: Date.now()
+            });
+        } else {
+            // Menos de 2 jogadores: cancela a partida
+            game.phase = 'cancelled';
+            io.to(roomId).emit('gameCancelled', {
+                message: 'Partida cancelada: jogadores insuficientes.'
+            });
+            console.log(`[DEBUG] Partida ${roomId} cancelada por falta de jogadores.`);
+
+            // Remove a sala por completo
             delete gameRooms[roomId];
         }
-        // Clean up the socket's memory
-        delete socket.roomId;
     });
 
     socket.on('acceptReturnToLobby', ({ roomId }) => {
