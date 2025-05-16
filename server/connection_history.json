@@ -1,0 +1,296 @@
+[
+  {
+    "socketId": "vCGxVQUpNMCmmiaPAAAP",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:33:08.189Z"
+  },
+  {
+    "socketId": "eyYTPEoJPjIZWsMDAAAR",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:33:11.201Z"
+  },
+  {
+    "socketId": "eyYTPEoJPjIZWsMDAAAR",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:33:29.854Z"
+  },
+  {
+    "socketId": "diw40gV4qLPFRP1jAAAT",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:33:29.876Z"
+  },
+  {
+    "socketId": "diw40gV4qLPFRP1jAAAT",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:33:36.617Z"
+  },
+  {
+    "socketId": "m4Gs8nIPoxomvZW5AAAV",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:33:36.638Z"
+  },
+  {
+    "socketId": "m4Gs8nIPoxomvZW5AAAV",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:33:50.881Z"
+  },
+  {
+    "socketId": "GS9d9hKvFvV-UBQ-AAAX",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:33:50.930Z"
+  },
+  {
+    "socketId": "fkFFoCksaAYhSh7kAAAN",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:34:02.290Z"
+  },
+  {
+    "socketId": "F2qXAuzrSGUDwMI3AAAZ",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:34:02.311Z"
+  },
+  {
+    "socketId": "F2qXAuzrSGUDwMI3AAAZ",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:34:09.018Z"
+  },
+  {
+    "socketId": "9_lpdXyOFn0Qdg3FAAAb",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:34:09.038Z"
+  },
+  {
+    "socketId": "GS9d9hKvFvV-UBQ-AAAX",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:35:35.943Z"
+  },
+  {
+    "socketId": "9_lpdXyOFn0Qdg3FAAAb",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:35:35.944Z"
+  },
+  {
+    "socketId": "IBcrwj5onZjeNWUqAAAd",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:35:38.949Z"
+  },
+  {
+    "socketId": "E3J-1BG6CA-wUa4EAAAf",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:35:43.160Z"
+  },
+  {
+    "socketId": "E3J-1BG6CA-wUa4EAAAf",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:35:49.902Z"
+  },
+  {
+    "socketId": "3iWFw_oCuyaD34f8AAAh",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:35:49.923Z"
+  },
+  {
+    "socketId": "IBcrwj5onZjeNWUqAAAd",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:35:51.021Z"
+  },
+  {
+    "socketId": "9hSIVnk5KmVfO4ajAAAj",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:35:51.079Z"
+  },
+  {
+    "socketId": "8jQe50N_n2TFzxSUAAAB",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:36:16.874Z"
+  },
+  {
+    "socketId": "QzLbjV2brv9uUgrwAAAD",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:36:16.991Z"
+  },
+  {
+    "socketId": "-QK59IwlAEej8Vi5AAAF",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:36:17.022Z"
+  },
+  {
+    "socketId": "8jQe50N_n2TFzxSUAAAB",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:36:18.610Z"
+  },
+  {
+    "socketId": "APp_BQAqShb_UqSpAAAH",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:36:18.632Z"
+  },
+  {
+    "socketId": "mt9Ou-pcAixR1u2BAAAB",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:37:44.548Z"
+  },
+  {
+    "socketId": "hXAUbhgvjwEQUWejAAAD",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:37:46.253Z"
+  },
+  {
+    "socketId": "mt9Ou-pcAixR1u2BAAAB",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:37:47.979Z"
+  },
+  {
+    "socketId": "BR6N8o8vOELuSg0QAAAF",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:37:48.014Z"
+  },
+  {
+    "socketId": "BR6N8o8vOELuSg0QAAAF",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:37:58.309Z"
+  },
+  {
+    "socketId": "pAPGcwV-EBhkq4S0AAAH",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:37:58.336Z"
+  },
+  {
+    "socketId": "pAPGcwV-EBhkq4S0AAAH",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:37:59.529Z"
+  },
+  {
+    "socketId": "4hisYuHaCmR3HGk7AAAJ",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:37:59.553Z"
+  },
+  {
+    "socketId": "4hisYuHaCmR3HGk7AAAJ",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:04.216Z"
+  },
+  {
+    "socketId": "CfPCLSWZh-xe3Wk9AAAL",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:04.244Z"
+  },
+  {
+    "socketId": "Im-VIZYoywdJRECJAAAB",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:08.280Z"
+  },
+  {
+    "socketId": "tjJLWCI5KnP8b471AAAD",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:08.401Z"
+  },
+  {
+    "socketId": "tjJLWCI5KnP8b471AAAD",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:11.464Z"
+  },
+  {
+    "socketId": "zAj5gf3kU4tWCUd_AAAF",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:11.497Z"
+  },
+  {
+    "socketId": "Im-VIZYoywdJRECJAAAB",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:18.255Z"
+  },
+  {
+    "socketId": "zAj5gf3kU4tWCUd_AAAF",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:20.388Z"
+  },
+  {
+    "socketId": "TPKdbn2pHzYy_xsNAAAB",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:28.346Z"
+  },
+  {
+    "socketId": "TPKdbn2pHzYy_xsNAAAB",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:31.682Z"
+  },
+  {
+    "socketId": "45VMMSop5w4MKFXAAAAD",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:32.100Z"
+  },
+  {
+    "socketId": "FL_Bwlon_EgNEArNAAAB",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:51.850Z"
+  },
+  {
+    "socketId": "FL_Bwlon_EgNEArNAAAB",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:53.621Z"
+  },
+  {
+    "socketId": "IuSvOcnbkMRUZIxpAAAD",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:53.651Z"
+  },
+  {
+    "socketId": "IuSvOcnbkMRUZIxpAAAD",
+    "ip": "127.0.0.1",
+    "event": "disconnect",
+    "timestamp": "2025-05-16T16:38:57.809Z"
+  },
+  {
+    "socketId": "PEHN6i9bGa6YueUmAAAF",
+    "ip": "127.0.0.1",
+    "event": "connect",
+    "timestamp": "2025-05-16T16:38:57.838Z"
+  }
+]

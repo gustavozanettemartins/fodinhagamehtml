@@ -506,7 +506,6 @@ class Game {
     }
 }
 
-
 function addSessionToRoom(roomId, persistentId) {
     // Se esse roomId ainda não tiver lista, cria uma vazia
     if (!playerQuitByRoom[roomId]) {
