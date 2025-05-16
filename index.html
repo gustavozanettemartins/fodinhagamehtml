@@ -13,6 +13,17 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+    <header>
+        <h1>Fodinha</h1>
+        <div id="room-info-bar" class="room-info-bar">
+            <span>Sala: <span id="current-room-code"></span></span>
+            <span class="players-online">Jogadores: <span id="players-count">0</span></span>            
+            <span class="leave-game">
+                <button id="leave-game-btn" title="Sair do jogo">Sair</button>
+            </span>
+        </div>
+    </header>
+
     <!-- Modal para entrar em uma sala -->
     <div class="modal" id="join-room-modal">
         <div class="modal-content">
@@ -47,6 +58,7 @@
             </div>
             <div class="modal-buttons">
                 <button id="player-ready-btn">Pronto</button>
+                <button id="leave-room-btn">Sair da sala</button>
             </div>
         </div>
     </div>
@@ -109,21 +121,7 @@
             </div>
         </div>
     </div>
-    
-    <header>
-        <h1>Fodinha</h1>
-        <div id="room-info-bar" class="room-info-bar">
-            <span>Sala: <span id="current-room-code"></span></span>
-            <span class="players-online">Jogadores: <span id="players-count">0</span></span>
-            <span class="sound-toggle">
-                <button id="sound-toggle-btn" title="Ativar/Desativar sons">🔊</button>
-            </span>
-            <span class="leave-game">
-                <button id="leave-game-btn" title="Sair do jogo">Sair</button>
-            </span>
-        </div>
-    </header>
-    
+
     <main>
         <div class="game-container">
             <div class="game-status">

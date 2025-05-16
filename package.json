@@ -1,17 +1,20 @@
 {
   "name": "fodinha-multiplayer",
   "version": "1.0.0",
+  "type": "module",
   "description": "Multiplayer card game Fodinha",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
-    "dev": "nodemon server/server.js"
+    "dev": "nodemon server/server.js",
+    "test-server": "node server/test_server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
+    "express-session": "^1.17.3",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
